@@ -1,0 +1,31 @@
+# Composer
+/vendor/
+composer.lock
+
+# WordPress
+.DS_Store
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.phpunit.result.cache
+phpunit.xml
+
+# Build files
+/build/
+/dist/
+
+# Node modules (if using npm/yarn)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment files
+.env
+.env.local
+
