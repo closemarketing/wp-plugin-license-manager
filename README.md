@@ -70,7 +70,7 @@ add_action( 'plugins_loaded', function() {
 
 **Result:** Complete license settings page under Settings → License with all fields, styling, and functionality!
 
-See [QUICK-START.md](QUICK-START.md) for more examples.
+See [QUICK-START.md](./docs/QUICK-START.md) for more examples.
 
 ### Basic Integration (Manual Settings)
 
