@@ -429,7 +429,7 @@ class Settings {
 	 * @return string
 	 */
 	private function get_documentation_url() {
-		return apply_filters( 'license_manager_documentation_url', 'https://close.marketing/docs/' );
+		return apply_filters( 'license_manager_documentation_url', 'https://close.technology/docs/' );
 	}
 
 	/**
@@ -438,7 +438,7 @@ class Settings {
 	 * @return string
 	 */
 	private function get_support_url() {
-		return apply_filters( 'license_manager_support_url', 'https://close.marketing/support/' );
+		return apply_filters( 'license_manager_support_url', 'https://close.technology/support/' );
 	}
 
 	/**
@@ -447,7 +447,7 @@ class Settings {
 	 * @return string
 	 */
 	private function get_account_url() {
-		return apply_filters( 'license_manager_account_url', 'https://close.marketing/my-account/' );
+		return apply_filters( 'license_manager_account_url', 'https://close.technology/my-account/' );
 	}
 }
 
