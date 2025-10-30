@@ -31,7 +31,7 @@ add_action( 'plugins_loaded', function() {
     // Initialize License.
     $license = new License(
         array(
-            'api_url'     => 'https://close.technology/',  // Your WooCommerce store.
+            'api_url'     => 'https://yourstore.com/',  // Your WooCommerce store.
             'file'        => __FILE__,
             'version'     => '1.0.0',
             'slug'        => 'my_plugin',
