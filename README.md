@@ -299,12 +299,8 @@ try {
 
 ## Changelog
 
-### 2.0.0
-- Complete refactor as Composer library
-- PSR-4 autoloading
-- Configurable options
-- Improved error handling
-- Better documentation
+### 1.0.1
+- Fixed instance blank and some login for saving license.
 
 ### 1.0.0
 - Initial release

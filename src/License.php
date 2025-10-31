@@ -248,6 +248,11 @@ class License {
 		$apikey_key = $this->get_option_key( 'apikey' );
 		$product_key = $this->get_option_key( 'product_id' );
 
+		$license_instance = get_option( $this->get_option_key( 'instance' ) );
+		if ( empty( $license_instance ) ) {
+			$this->license_instance_activation();
+		}
+
 		if ( isset( $_POST[ $apikey_key ] ) ) {
 			update_option( $apikey_key, sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) ) );
 		}
@@ -316,7 +321,7 @@ class License {
 	 * Validates license option
 	 *
 	 * @param array $input Settings input option.
-	 * @return void
+	 * @return array
 	 */
 	public function validate_license( $input ) {
 		$apikey_key        = $this->get_option_key( 'apikey' );
@@ -354,6 +359,11 @@ class License {
 				if ( isset( $deactivation_result['data']['error_code'] ) ) {
 					add_settings_error( 'license_error', 'license_client_error', esc_attr( $deactivation_result['data']['error'] ), 'error' );
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+
+					return array(
+						'status'  => 'error',
+						'message' => $deactivation_result['data']['error'],
+					);
 				}
 			}
 
@@ -365,7 +375,7 @@ class License {
 		}
 
 		// Activate License.
-		if ( 'Deactivated' === $activation_status || '' === $activation_status || '' === $api_key || 'on' === $checkbox_status || $current_api_key !== $api_key ) {
+		if ( 'Deactivated' === $activation_status || empty( $activation_status ) || '' === $api_key || 'on' === $checkbox_status || $current_api_key !== $api_key ) {
 			// Replace existing key if different.
 			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key ) {
 				$this->replace_license_key( $current_api_key );
@@ -377,15 +387,30 @@ class License {
 				$activate_results = json_decode( $activation_result, true );
 
 				if ( true === $activate_results['success'] && true === $activate_results['activated'] ) {
-					add_settings_error( 'activate_text', 'activate_msg', __( 'License activated successfully.', $this->options['text_domain'] ) . ' ' . esc_attr( $activate_results['message'] ), 'updated' );
+					$message = __( 'License activated successfully.', $this->options['text_domain'] ) . ' ' . esc_attr( $activate_results['message'] );
+
+					add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
+
+					// Update license key and status.
 					update_option( $apikey_key, $api_key );
 					update_option( $this->get_option_key( 'activated' ), 'Activated' );
 					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+
+					return array(
+						'status'  => 'ok',
+						'message' => $message,
+					);
 				}
 
 				if ( false === $activate_results && ! empty( get_option( $this->get_option_key( 'activated' ) ) ) ) {
 					add_settings_error( 'api_key_check', 'api_key_check_error', esc_html__( 'Connection failed to the License Key API server. Try again later.', $this->options['text_domain'] ), 'error' );
+	
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+
+					return array(
+						'status' => 'error',
+						'message' => esc_html__( 'Connection failed to the License Key API server. Try again later.', $this->options['text_domain'] ),
+					);
 				}
 
 				if ( isset( $activate_results['data']['error_code'] ) ) {
@@ -393,7 +418,14 @@ class License {
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
 				}
 			} else {
-				add_settings_error( 'not_activated', 'not_activated_error', esc_html__( 'The API Key activation could not be completed due to an unknown error.', $this->options['text_domain'] ), 'error' );
+				$message = esc_html__( 'The API Key activation could not be completed due to an unknown error.', $this->options['text_domain'] );
+
+				add_settings_error( 'not_activated', 'not_activated_error', $message );
+
+				return array(
+					'status' => 'error',
+					'message' => $message,
+				);
 			}
 		}
 	}
@@ -778,4 +810,3 @@ class License {
 		return $this->options['api_url'];
 	}
 }
-
