@@ -220,14 +220,14 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
-### 3.0.0
+### 1.1.0
 - **Breaking Change**: Migrated from WooCommerce API Manager to Enwikuna License Manager
 - New required options: `rest_api_key`, `rest_api_secret`, `product_uuid`
 - Removed `product_id` option (replaced by `product_uuid`)
 - Updated API endpoints to use Enwikuna REST API
 - Simplified license field (removed Product ID field)
 
-### 2.0.0
+### 1.0.1
 - Added Settings class for automatic settings page generation
 - Improved UI and styling
 
