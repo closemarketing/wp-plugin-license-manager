@@ -1,13 +1,13 @@
 {
 	"name": "closemarketing/wp-plugin-license-manager",
-	"description": "WordPress Plugin License Manager Library - A reusable library for managing WordPress plugin licenses with WooCommerce API Manager",
+	"description": "WordPress Plugin License Manager Library - A reusable library for managing WordPress plugin licenses with Enwikuna License Manager",
 	"type": "library",
 	"keywords": [
 		"wordpress",
 		"license",
 		"plugin",
-		"woocommerce",
-		"api-manager",
+		"enwikuna",
+		"license-manager",
 		"updates"
 	],
 	"license": "GPL-2.0-or-later",

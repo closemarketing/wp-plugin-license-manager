@@ -1,24 +1,22 @@
 # WordPress Plugin License Manager
 
-A reusable Composer library for managing WordPress plugin licenses with WooCommerce API Manager.
+A reusable Composer library for managing WordPress plugin licenses with Enwikuna License Manager.
 
 ## Features
 
-- ✅ **Zero-code settings page** - Automatic UI generation, no fields to create!
 - ✅ Easy integration with any WordPress plugin
 - ✅ License activation/deactivation
 - ✅ Automatic plugin updates
-- ✅ Beautiful, responsive admin interface
 - ✅ Configurable text domain for translations
-- ✅ Flexible settings page integration
-- ✅ WooCommerce API Manager compatible
+- ✅ Flexible settings integration
+- ✅ Enwikuna License Manager compatible
 - ✅ WordPress Coding Standards compliant
 
 ## Requirements
 
 - PHP 7.4 or higher
 - WordPress 5.0 or higher
-- WooCommerce API Manager (server-side)
+- Enwikuna License Manager (server-side)
 
 ## Installation
 
@@ -33,48 +31,22 @@ Or manually add to your `composer.json`:
 ```json
 {
     "require": {
-        "closemarketing/wp-plugin-license-manager": "^2.0"
-    }
+        "closemarketing/wp-plugin-license-manager": "@dev"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../wp-plugin-license-manager"
+        }
+    ]
 }
 ```
 
 ## Usage
 
-### 🚀 The Easiest Way (Recommended)
+### Basic Integration
 
-**Want a complete settings page with ZERO field creation?** Use the `Settings` class:
-
-```php
-<?php
-require_once __DIR__ . '/vendor/autoload.php';
-
-use Closemarketing\WPLicenseManager\License;
-use Closemarketing\WPLicenseManager\Settings;
-
-add_action( 'plugins_loaded', function() {
-    $license = new License(
-        array(
-            'api_url'     => 'https://yourstore.com/',
-            'file'        => __FILE__,
-            'version'     => '1.0.0',
-            'slug'        => 'my_plugin',
-            'name'        => 'My Plugin',
-            'text_domain' => 'my-plugin',
-        )
-    );
-    
-    // That's it! Complete settings page automatically created
-    new Settings( $license );
-} );
-```
-
-**Result:** Complete license settings page under Settings → License with all fields, styling, and functionality!
-
-See [QUICK-START.md](./docs/QUICK-START.md) for more examples.
-
-### Basic Integration (Manual Settings)
-
-If you want to create your own settings page, add this code to your main plugin file:
+Add this code to your main plugin file:
 
 ```php
 <?php
@@ -88,123 +60,94 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Closemarketing\WPLicenseManager\License;
 
+// License configuration constants.
+define( 'MYPLUGIN_LICENSE_API_URL', 'https://yourstore.com/' );
+define( 'MYPLUGIN_LICENSE_API_KEY', 'ck_your_consumer_key' );
+define( 'MYPLUGIN_LICENSE_API_SECRET', 'cs_your_consumer_secret' );
+define( 'MYPLUGIN_LICENSE_PRODUCT_UUID', 'YOUR-PRODUCT-UUID' );
+
+// Global license instance.
+$myplugin_license = null;
+
 // Initialize the license manager.
-function my_plugin_init_license() {
-	try {
-		$license = new License(
-			array(
-				'api_url'      => 'https://yourstore.com/', // Your WooCommerce store URL.
-				'file'         => __FILE__,                 // Main plugin file.
-				'version'      => '1.0.0',                  // Plugin version.
-				'slug'         => 'my-plugin',              // Plugin slug.
-				'name'         => 'My Awesome Plugin',      // Plugin name.
-				'text_domain'  => 'my-plugin',              // Text domain for translations.
-			)
-		);
-	} catch ( \Exception $e ) {
-		// Handle initialization error.
-		add_action(
-			'admin_notices',
-			function() use ( $e ) {
-				echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
-			}
-		);
-	}
+add_action( 'plugins_loaded', function() {
+    global $myplugin_license;
+
+    if ( ! class_exists( '\Closemarketing\WPLicenseManager\License' ) ) {
+        return;
+    }
+
+    try {
+        $myplugin_license = new License(
+            array(
+                'api_url'          => MYPLUGIN_LICENSE_API_URL,
+                'rest_api_key'     => MYPLUGIN_LICENSE_API_KEY,
+                'rest_api_secret'  => MYPLUGIN_LICENSE_API_SECRET,
+                'product_uuid'     => MYPLUGIN_LICENSE_PRODUCT_UUID,
+                'file'             => __FILE__,
+                'version'          => '1.0.0',
+                'slug'             => 'my-plugin',
+                'name'             => 'My Awesome Plugin',
+                'text_domain'      => 'my-plugin',
+                'settings_page'    => 'my-plugin-settings',
+                'settings_tabs'    => 'my_plugin_tabs_hook',    // Your tabs action hook.
+                'settings_content' => 'my_plugin_content_hook', // Your content action hook.
+            )
+        );
+    } catch ( \Exception $e ) {
+        add_action( 'admin_notices', function() use ( $e ) {
+            echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
+        });
+    }
+}, 5 );
+
+// Helper function to check license status.
+function myplugin_is_license_valid() {
+    global $myplugin_license;
+    return $myplugin_license && $myplugin_license->is_license_active();
 }
-add_action( 'plugins_loaded', 'my_plugin_init_license' );
 ```
 
-### With Settings Page Integration
+### Custom Settings Page Integration
 
-If your plugin already has a settings page with tabs:
-
-```php
-<?php
-use Closemarketing\WPLicenseManager\License;
-
-function my_plugin_init_license() {
-	$license = new License(
-		array(
-			'api_url'           => 'https://yourstore.com/',
-			'file'              => __FILE__,
-			'version'           => '1.0.0',
-			'slug'              => 'my_plugin',
-			'name'              => 'My Awesome Plugin',
-			'text_domain'       => 'my-plugin',
-			'settings_page'     => 'my_plugin_settings',         // Your settings page slug.
-			'settings_tabs'     => 'my_plugin_settings_tabs',    // Action hook for tabs.
-			'settings_content'  => 'my_plugin_settings_content', // Action hook for content.
-		)
-	);
-}
-add_action( 'plugins_loaded', 'my_plugin_init_license' );
-```
-
-### Complete Settings Page Example
-
-Here's a complete example of how to integrate the license manager with a settings page:
+If you want to handle the license UI yourself (like FrontBlocks does), set the tab hooks to unused values and create your own form:
 
 ```php
-<?php
-// Add menu item.
-add_action( 'admin_menu', 'my_plugin_add_admin_menu' );
-function my_plugin_add_admin_menu() {
-	add_options_page(
-		'My Plugin Settings',
-		'My Plugin',
-		'manage_options',
-		'my_plugin_settings',
-		'my_plugin_settings_page'
-	);
-}
-
-// Render settings page.
-function my_plugin_settings_page() {
-	$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'general';
-	?>
-	<div class="wrap">
-		<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-		<h2 class="nav-tab-wrapper">
-			<a href="?page=my_plugin_settings&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
-				<?php esc_html_e( 'General', 'my-plugin' ); ?>
-			</a>
-			<?php do_action( 'my_plugin_settings_tabs', $active_tab ); ?>
-		</h2>
-		<div class="tab-content">
-			<?php
-			if ( 'general' === $active_tab ) {
-				echo '<p>' . esc_html__( 'General settings here...', 'my-plugin' ) . '</p>';
-			}
-			do_action( 'my_plugin_settings_content', $active_tab );
-			?>
-		</div>
-	</div>
-	<?php
-}
-
-// Initialize License Manager.
-use Closemarketing\WPLicenseManager\License;
-
 $license = new License(
-	array(
-		'api_url'           => 'https://yourstore.com/',
-		'file'              => __FILE__,
-		'version'           => '1.0.0',
-		'slug'              => 'my_plugin',
-		'name'              => 'My Awesome Plugin',
-		'text_domain'       => 'my-plugin',
-		'settings_page'     => 'my_plugin_settings',
-		'settings_tabs'     => 'my_plugin_settings_tabs',
-		'settings_content'  => 'my_plugin_settings_content',
-	)
+    array(
+        // ... other options ...
+        'settings_tabs'    => 'myplugin_tabs_disabled',    // Disabled - UI handled manually.
+        'settings_content' => 'myplugin_content_disabled', // Disabled - UI handled manually.
+    )
 );
+```
+
+Then in your settings page, create a form that submits to `options.php` with:
+
+```php
+<form method="post" action="options.php">
+    <?php settings_fields( 'my-plugin_license' ); ?>
+    
+    <input type="text" 
+        name="my-plugin_license_apikey" 
+        value="<?php echo esc_attr( get_option( 'my-plugin_license_apikey' ) ); ?>"
+    />
+    
+    <!-- For deactivation, add checkbox when license is active -->
+    <input type="checkbox" name="my-plugin_license_deactivate_checkbox" value="on" />
+    
+    <button type="submit">Save</button>
+</form>
 ```
 
 ## Configuration Options
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `api_url` | string | Yes | - | Your WooCommerce API Manager URL |
+| `api_url` | string | Yes | - | Your Enwikuna License Manager URL |
+| `rest_api_key` | string | Yes | - | REST API Consumer Key (ck_xxx) |
+| `rest_api_secret` | string | Yes | - | REST API Consumer Secret (cs_xxx) |
+| `product_uuid` | string | Yes | - | Product UUID from Enwikuna |
 | `file` | string | Yes | - | Main plugin file path (`__FILE__`) |
 | `version` | string | Yes | - | Plugin version |
 | `slug` | string | Yes | - | Plugin slug (used for option keys) |
@@ -219,6 +162,28 @@ $license = new License(
 | `settings_section` | string | No | `{slug}_settings_admin_license` | Settings section ID |
 | `capabilities` | string | No | 'manage_options' | Required user capability |
 
+## Enwikuna License Manager Setup
+
+### Server Requirements
+
+1. Install Enwikuna License Manager on your store
+2. Create a product with a UUID
+3. Create REST API credentials:
+   - Go to **Enwikuna License Manager → Settings → REST API**
+   - Click **Add Key**
+   - Set **Permission** to **Read/Write**
+   - Enable routes: **104, 106, 107** (for licenses) and **301-304** (for updates)
+   - Copy the **Consumer Key** and **Consumer Secret**
+
+### Required Routes
+
+| Route | Description |
+|-------|-------------|
+| 104 | Validate License |
+| 106 | Activate License |
+| 107 | Deactivate License |
+| 301-304 | Release/Update info |
+
 ## Public Methods
 
 ### `is_license_active()`
@@ -227,7 +192,7 @@ Check if the license is currently active:
 
 ```php
 if ( $license->is_license_active() ) {
-	// License is active, enable premium features.
+    // License is active, enable premium features.
 }
 ```
 
@@ -247,63 +212,27 @@ $status = $license->get_api_key_status( true );
 
 The library creates the following options in the WordPress database:
 
-- `{slug}_license_apikey` - API key
-- `{slug}_license_product_id` - Product ID
-- `{slug}_license_activated` - Activation status ('Activated' or 'Deactivated')
-- `{slug}_license_instance` - Unique instance ID
+- `{slug}_license_apikey` - License key
+- `{slug}_license_activated` - Activation status ('Activated', 'Deactivated', or 'Expired')
 - `{slug}_license_deactivate_checkbox` - Deactivation checkbox status
 
 Replace `{slug}` with your plugin slug.
 
-## WooCommerce API Manager Setup
-
-This library is designed to work with the [WooCommerce API Manager](https://www.toddlahman.com/shop/woocommerce-api-manager/) plugin on your WooCommerce store.
-
-### Server Requirements
-
-1. Install WooCommerce API Manager on your store
-2. Create a product with API management enabled
-3. Set the API product ID
-4. Distribute the API key to your customers
-
-## Translation
-
-The library is translation-ready. All strings use the text domain you specify in the configuration.
-
-To translate:
-
-1. Use your plugin's text domain
-2. Generate `.pot` file with your plugin's translations
-3. The license strings will be included automatically
-
-## Error Handling
-
-The library throws exceptions during initialization if required options are missing:
-
-```php
-try {
-	$license = new License( $options );
-} catch ( \Exception $e ) {
-	// Handle error - required option missing.
-	error_log( 'License Manager Error: ' . $e->getMessage() );
-}
-```
-
-## Security
-
-- All inputs are sanitized and validated
-- Uses WordPress nonces for form submissions
-- Escapes all output
-- Follows WordPress coding standards
-- Uses Yoda conditions for comparisons
-
 ## Changelog
 
+### 1.1.0
+- **Breaking Change**: Migrated from WooCommerce API Manager to Enwikuna License Manager
+- New required options: `rest_api_key`, `rest_api_secret`, `product_uuid`
+- Removed `product_id` option (replaced by `product_uuid`)
+- Updated API endpoints to use Enwikuna REST API
+- Simplified license field (removed Product ID field)
+
 ### 1.0.1
-- Fixed instance blank and some login for saving license.
+- Added Settings class for automatic settings page generation
+- Improved UI and styling
 
 ### 1.0.0
-- Initial release
+- Initial release with WooCommerce API Manager support
 
 ## Support
 
@@ -320,4 +249,3 @@ GPL-2.0-or-later
 Developed by [Close Marketing](https://close.marketing)
 
 Author: David Perez <david@closemarketing.es>
-

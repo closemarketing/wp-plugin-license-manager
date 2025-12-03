@@ -2,12 +2,12 @@
 /**
  * License Manager Library
  *
- * A reusable library for managing WordPress plugin licenses with WooCommerce API Manager.
+ * A reusable library for managing WordPress plugin licenses with Enwikuna License Manager.
  *
  * @package    Closemarketing\WPLicenseManager
  * @author     David Perez <david@closemarketing.es>
  * @copyright  2019 Closemarketing
- * @version    2.0.0
+ * @version    3.0.0
  */
 
 namespace Closemarketing\WPLicenseManager;
@@ -36,6 +36,9 @@ class License {
 	 */
 	private $default_options = array(
 		'api_url'           => '',           // API URL (required).
+		'rest_api_key'      => '',           // REST API Consumer Key (required).
+		'rest_api_secret'   => '',           // REST API Consumer Secret (required).
+		'product_uuid'      => '',           // Product UUID (required).
 		'file'              => '',           // Plugin main file (required).
 		'version'           => '',           // Plugin version (required).
 		'slug'              => '',           // Plugin slug (required).
@@ -73,7 +76,7 @@ class License {
 	 * @return void
 	 */
 	private function validate_required_options() {
-		$required = array( 'api_url', 'file', 'version', 'slug', 'name' );
+		$required = array( 'api_url', 'rest_api_key', 'rest_api_secret', 'product_uuid', 'file', 'version', 'slug', 'name' );
 
 		foreach ( $required as $key ) {
 			if ( empty( $this->options[ $key ] ) ) {
@@ -81,6 +84,9 @@ class License {
 				throw new \Exception( sprintf( 'License Manager: Required option "%s" is missing.', $key ) );
 			}
 		}
+
+		// Ensure API URL ends with slash.
+		$this->options['api_url'] = trailingslashit( $this->options['api_url'] ) . 'wp-json/elm/v1/';
 
 		// Set defaults for optional fields based on slug.
 		if ( empty( $this->options['plugin_slug'] ) ) {
@@ -123,9 +129,6 @@ class License {
 		add_action( $this->options['settings_content'], array( $this, 'add_license_content' ) );
 		add_action( 'admin_init', array( $this, 'page_init' ) );
 
-		// Creates license activation.
-		register_activation_hook( $this->options['file'], array( $this, 'license_instance_activation' ) );
-
 		// Check for external blocking.
 		add_action( 'admin_notices', array( $this, 'check_external_blocking' ) );
 
@@ -134,6 +137,55 @@ class License {
 		add_filter( 'plugins_api', array( $this, 'information_request' ), 10, 3 );
 	}
 
+	/**
+	 * Make API request to Enwikuna License Manager.
+	 *
+	 * @param string $endpoint    API endpoint (e.g., 'licenses/activate').
+	 * @param string $license_key License key to append to URL.
+	 * @param array  $body        Request body.
+	 * @param string $method      HTTP method (GET, POST).
+	 * @return object|WP_Error
+	 */
+	private function api_request( $endpoint, $license_key = '', $body = array(), $method = 'POST' ) {
+		// Build URL: {API_URL}{endpoint}/{license_key}.
+		$url = $this->options['api_url'] . $endpoint;
+		if ( ! empty( $license_key ) ) {
+			$url .= '/' . $license_key;
+		}
+
+		$args = array(
+			'method'      => $method,
+			'timeout'     => 45,
+			'redirection' => 5,
+			'httpversion' => '1.0',
+			'blocking'    => true,
+			'sslverify'   => true,
+			'headers'     => array(
+				'Authorization' => 'Basic ' . base64_encode( $this->options['rest_api_key'] . ':' . $this->options['rest_api_secret'] ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			),
+		);
+
+		if ( ! empty( $body ) ) {
+			$args['body'] = $body;
+		}
+
+		$response = wp_remote_request( $url, $args );
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$status_code   = wp_remote_retrieve_response_code( $response );
+		$response_body = wp_remote_retrieve_body( $response );
+		$data          = json_decode( $response_body );
+
+		if ( in_array( $status_code, array( 400, 401, 403, 404, 405, 500 ), true ) ) {
+			$message = isset( $data->message ) ? $data->message : __( 'Unknown error occurred.', $this->options['text_domain'] );
+			return new \WP_Error( 'api_error', $message, array( 'status' => $status_code ) );
+		}
+
+		return $data;
+	}
 
 	/**
 	 * Add settings tab.
@@ -182,9 +234,6 @@ class License {
 			'<strong>' . esc_html( $this->options['name'] ) . '</strong>'
 		);
 		echo '</p>';
-		echo '</div><div class="help">';
-		echo '<h2>' . esc_html__( 'License Instance', $this->options['text_domain'] ) . '</h2>';
-		echo '<p style="color:#50575e;">' . esc_html__( 'Instance:', $this->options['text_domain'] ) . ' ' . esc_html( get_option( $this->get_option_key( 'instance' ) ) ) . '</p>';
 		echo '</div></div>';
 	}
 
@@ -207,16 +256,8 @@ class License {
 
 		add_settings_field(
 			$this->get_option_key( 'apikey' ),
-			__( 'License API Key', $this->options['text_domain'] ),
+			__( 'License Key', $this->options['text_domain'] ),
 			array( $this, 'license_apikey_callback' ),
-			$this->options['settings_section'],
-			$this->options['option_group']
-		);
-
-		add_settings_field(
-			$this->get_option_key( 'product_id' ),
-			__( 'License Product ID', $this->options['text_domain'] ),
-			array( $this, 'license_product_id_callback' ),
 			$this->options['settings_section'],
 			$this->options['option_group']
 		);
@@ -246,19 +287,10 @@ class License {
 	 */
 	public function sanitize_fields_license( $input ) {
 		$apikey_key = $this->get_option_key( 'apikey' );
-		$product_key = $this->get_option_key( 'product_id' );
-
-		$license_instance = get_option( $this->get_option_key( 'instance' ) );
-		if ( empty( $license_instance ) ) {
-			$this->license_instance_activation();
-		}
 
 		if ( isset( $_POST[ $apikey_key ] ) ) {
-			update_option( $apikey_key, sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) ) );
-		}
-
-		if ( isset( $_POST[ $product_key ] ) ) {
-			update_option( $product_key, sanitize_text_field( wp_unslash( $_POST[ $product_key ] ) ) );
+			$new_api_key = sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) );
+			update_option( $apikey_key, $new_api_key );
 		}
 
 		$this->validate_license( $_POST );
@@ -274,16 +306,7 @@ class License {
 	public function license_apikey_callback() {
 		$value = get_option( $this->get_option_key( 'apikey' ) );
 		echo '<input type="text" class="regular-text" name="' . esc_attr( $this->get_option_key( 'apikey' ) ) . '" id="license_apikey" value="' . esc_attr( $value ) . '">';
-	}
-
-	/**
-	 * Callback for Setting license Product ID
-	 *
-	 * @return void
-	 */
-	public function license_product_id_callback() {
-		$value = get_option( $this->get_option_key( 'product_id' ) );
-		echo '<input type="text" class="regular-text" name="' . esc_attr( $this->get_option_key( 'product_id' ) ) . '" size="25" id="license_product_id" value="' . esc_attr( $value ) . '">';
+		echo '<p class="description">' . esc_html__( 'Enter your license key to activate the plugin.', $this->options['text_domain'] ) . '</p>';
 	}
 
 	/**
@@ -292,15 +315,34 @@ class License {
 	 * @return void
 	 */
 	public function license_status_callback() {
-		if ( $this->get_api_key_status( true ) ) {
-			$license_status_check = esc_html__( 'Activated', $this->options['text_domain'] );
-			update_option( $this->get_option_key( 'activated' ), 'Activated' );
-			update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
-		} else {
-			$license_status_check = esc_html__( 'Deactivated', $this->options['text_domain'] );
+		$license_key = get_option( $this->get_option_key( 'apikey' ) );
+		$status      = get_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+
+		if ( ! empty( $license_key ) && 'Activated' === $status ) {
+			// Verify with API.
+			$response = $this->api_request( 'licenses', $license_key, array(), 'GET' );
+
+			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
+				$api_status = isset( $response->data->status ) ? $response->data->status : '';
+				$expires_at = isset( $response->data->expires_at ) ? $response->data->expires_at : '';
+
+				if ( 'active' === $api_status ) {
+					echo '<span style="color: green; font-weight: bold;">' . esc_html__( 'Activated', $this->options['text_domain'] ) . '</span>';
+					if ( ! empty( $expires_at ) ) {
+						echo '<br><small>' . esc_html__( 'Expires:', $this->options['text_domain'] ) . ' ' . esc_html( $expires_at ) . '</small>';
+					}
+					update_option( $this->get_option_key( 'activated' ), 'Activated' );
+					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+					return;
+				} elseif ( 'expired' === $api_status ) {
+					echo '<span style="color: orange; font-weight: bold;">' . esc_html__( 'Expired', $this->options['text_domain'] ) . '</span>';
+					update_option( $this->get_option_key( 'activated' ), 'Expired' );
+					return;
+				}
+			}
 		}
 
-		echo esc_attr( $license_status_check );
+		echo '<span style="color: red;">' . esc_html__( 'Deactivated', $this->options['text_domain'] ) . '</span>';
 	}
 
 	/**
@@ -331,161 +373,114 @@ class License {
 		$checkbox_status   = get_option( $this->get_option_key( 'deactivate_checkbox' ) );
 		$current_api_key   = get_option( $apikey_key, '' );
 
-		// Product ID.
-		$product_key = $this->get_option_key( 'product_id' );
-		if ( isset( $input[ $product_key ] ) ) {
-			$new_product_id = absint( $input[ $product_key ] );
-			if ( ! empty( $new_product_id ) ) {
-				update_option( $product_key, $new_product_id );
-			}
-		}
-
 		// Deactivate License.
 		if ( isset( $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) && 'on' === $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) {
-			$args = array(
-				'api_key' => ! empty( $api_key ) ? $api_key : '',
-			);
-			$deactivation_result = $this->license_deactivate( $args );
+			$key_to_deactivate = ! empty( $api_key ) ? $api_key : $current_api_key;
 
-			if ( ! empty( $deactivation_result ) && is_array( $deactivation_result ) ) {
-				if ( true === $deactivation_result['success'] && true === $deactivation_result['deactivated'] ) {
+			if ( ! empty( $key_to_deactivate ) ) {
+				$deactivation_result = $this->license_deactivate( $key_to_deactivate );
+
+				if ( ! is_wp_error( $deactivation_result ) ) {
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
 					update_option( $apikey_key, '' );
-					update_option( $product_key, '' );
 					add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated successfully.', $this->options['text_domain'] ), 'updated' );
-					return;
+					return array();
 				}
 
-				if ( isset( $deactivation_result['data']['error_code'] ) ) {
-					add_settings_error( 'license_error', 'license_client_error', esc_attr( $deactivation_result['data']['error'] ), 'error' );
-					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-
-					return array(
-						'status'  => 'error',
-						'message' => $deactivation_result['data']['error'],
-					);
-				}
+				// Deactivate locally anyway.
+				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+				update_option( $apikey_key, '' );
+				add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated locally.', $this->options['text_domain'] ), 'updated' );
+				return array();
 			}
 
-			// Remove anyway.
-			update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-			update_option( $apikey_key, '' );
-			update_option( $product_key, '' );
-			return;
+			return array();
 		}
 
 		// Activate License.
 		if ( 'Deactivated' === $activation_status || empty( $activation_status ) || '' === $api_key || 'on' === $checkbox_status || $current_api_key !== $api_key ) {
-			// Replace existing key if different.
-			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key ) {
-				$this->replace_license_key( $current_api_key );
+			// Deactivate existing key if different.
+			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key && ! empty( $api_key ) ) {
+				$this->license_deactivate( $current_api_key );
 			}
 
-			$activation_result = $this->license_activate( $api_key );
+			if ( ! empty( $api_key ) ) {
+				$activation_result = $this->license_activate( $api_key );
 
-			if ( ! empty( $activation_result ) ) {
-				$activate_results = json_decode( $activation_result, true );
+				if ( ! is_wp_error( $activation_result ) && ! empty( $activation_result->data ) ) {
+					$status = isset( $activation_result->data->status ) ? $activation_result->data->status : '';
 
-				if ( true === $activate_results['success'] && true === $activate_results['activated'] ) {
-					$message = __( 'License activated successfully.', $this->options['text_domain'] ) . ' ' . esc_attr( $activate_results['message'] );
+					if ( 'active' === $status ) {
+						$message = __( 'License activated successfully.', $this->options['text_domain'] );
+						add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
 
-					add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
+						// Update license key and status.
+						update_option( $apikey_key, $api_key );
+						update_option( $this->get_option_key( 'activated' ), 'Activated' );
+						update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
 
-					// Update license key and status.
-					update_option( $apikey_key, $api_key );
-					update_option( $this->get_option_key( 'activated' ), 'Activated' );
-					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
-
-					return array(
-						'status'  => 'ok',
-						'message' => $message,
-					);
+						return array(
+							'status'  => 'ok',
+							'message' => $message,
+						);
+					}
 				}
 
-				if ( false === $activate_results && ! empty( get_option( $this->get_option_key( 'activated' ) ) ) ) {
-					add_settings_error( 'api_key_check', 'api_key_check_error', esc_html__( 'Connection failed to the License Key API server. Try again later.', $this->options['text_domain'] ), 'error' );
-	
+				if ( is_wp_error( $activation_result ) ) {
+					add_settings_error( 'license_error', 'license_client_error', $activation_result->get_error_message(), 'error' );
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-
-					return array(
-						'status' => 'error',
-						'message' => esc_html__( 'Connection failed to the License Key API server. Try again later.', $this->options['text_domain'] ),
-					);
-				}
-
-				if ( isset( $activate_results['data']['error_code'] ) ) {
-					add_settings_error( 'license_error', 'license_client_error', esc_attr( $activate_results['data']['error'] ), 'error' );
+				} else {
+					$message = esc_html__( 'The license key activation could not be completed.', $this->options['text_domain'] );
+					add_settings_error( 'not_activated', 'not_activated_error', $message );
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
 				}
-			} else {
-				$message = esc_html__( 'The API Key activation could not be completed due to an unknown error.', $this->options['text_domain'] );
-
-				add_settings_error( 'not_activated', 'not_activated_error', $message );
-
-				return array(
-					'status' => 'error',
-					'message' => $message,
-				);
 			}
 		}
+
+		return array();
 	}
 
 	/**
-	 * Sends the request to activate to the API Manager.
+	 * Sends the request to activate to the Enwikuna License Manager.
 	 *
-	 * @param string $api_key API Key to activate.
-	 * @return string
+	 * @param string $api_key License Key to activate.
+	 * @return object|WP_Error
 	 */
 	public function license_activate( $api_key ) {
 		if ( empty( $api_key ) ) {
-			add_settings_error( 'not_activated', 'not_activated_error', esc_html__( 'The API Key is missing from the activation request.', $this->options['text_domain'] ), 'error' );
-			return '';
+			return new \WP_Error( 'missing_key', __( 'The License Key is missing from the activation request.', $this->options['text_domain'] ) );
 		}
 
-		$defaults            = $this->get_license_defaults( 'activate', true );
-		$defaults['api_key'] = $api_key;
-		$target_url          = esc_url_raw( $this->create_software_api_url( $defaults ) );
-		$request             = wp_safe_remote_post( $target_url, array( 'timeout' => 15 ) );
-
-		if ( is_wp_error( $request ) || 200 !== wp_remote_retrieve_response_code( $request ) ) {
-			return '';
-		}
-
-		return wp_remote_retrieve_body( $request );
+		return $this->api_request(
+			'licenses/activate',
+			$api_key,
+			array(
+				'host'         => home_url(),
+				'product_uuid' => $this->options['product_uuid'],
+			),
+			'POST'
+		);
 	}
 
 	/**
-	 * Sends the request to deactivate to the API Manager.
+	 * Sends the request to deactivate to the Enwikuna License Manager.
 	 *
-	 * @param array $args Arguments to deactivate.
-	 * @return array|void
+	 * @param string $license_key License key to deactivate.
+	 * @return object|WP_Error
 	 */
-	public function license_deactivate( $args ) {
-		if ( empty( $args ) ) {
-			add_settings_error( 'not_deactivated', 'not_deactivated_error', esc_html__( 'The API Key is missing from the deactivation request.', $this->options['text_domain'] ), 'error' );
-			return;
+	public function license_deactivate( $license_key ) {
+		if ( empty( $license_key ) ) {
+			return new \WP_Error( 'missing_key', __( 'The License Key is missing from the deactivation request.', $this->options['text_domain'] ) );
 		}
 
-		$defaults   = $this->get_license_defaults( 'deactivate' );
-		$args       = wp_parse_args( $defaults, $args );
-		$target_url = esc_url_raw( $this->create_software_api_url( $args ) );
-		$request    = wp_safe_remote_post( $target_url, array( 'timeout' => 15 ) );
-		$body_json  = wp_remote_retrieve_body( $request );
-		$result_api = json_decode( $body_json, true );
-
-		$error = ! empty( $result_api['error'] ) ? $result_api['error'] : '';
-
-		if ( is_wp_error( $request ) || 200 !== wp_remote_retrieve_response_code( $request ) || $error ) {
-			add_settings_error(
-				'not_deactivated',
-				'not_deactivated_error',
-				$error,
-				'error'
-			);
-			return;
-		}
-
-		return $result_api;
+		return $this->api_request(
+			'licenses/deactivate',
+			$license_key,
+			array(
+				'host' => home_url(),
+			),
+			'POST'
+		);
 	}
 
 	/**
@@ -496,120 +491,21 @@ class License {
 	 */
 	public function get_api_key_status( $live = false ) {
 		if ( $live ) {
-			$license_status = $this->license_key_status();
-			return ! empty( $license_status ) && ! empty( $license_status['data']['activated'] ) && $license_status['data']['activated'];
-		}
+			$license_key = get_option( $this->get_option_key( 'apikey' ) );
+			if ( empty( $license_key ) ) {
+				return false;
+			}
 
-		return 'Activated' === get_option( $this->get_option_key( 'activated' ) );
-	}
+			$response = $this->api_request( 'licenses', $license_key, array(), 'GET' );
 
-	/**
-	 * Returns the API Key status.
-	 *
-	 * @return array|mixed|object
-	 */
-	public function license_key_status() {
-		$status = $this->status();
-		return ! empty( $status ) ? json_decode( $status, true ) : $status;
-	}
+			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
+				return 'active' === $response->data->status;
+			}
 
-	/**
-	 * Sends the status check request to the API Manager.
-	 *
-	 * @return bool|string
-	 */
-	public function status() {
-		if ( empty( get_option( $this->get_option_key( 'apikey' ) ) ) ) {
-			return '';
-		}
-
-		$defaults   = $this->get_license_defaults( 'status' );
-		$target_url = esc_url_raw( $this->create_software_api_url( $defaults ) );
-		$request    = wp_safe_remote_post( $target_url, array( 'timeout' => 15 ) );
-
-		if ( is_wp_error( $request ) || 200 !== wp_remote_retrieve_response_code( $request ) ) {
-			return '';
-		}
-
-		return wp_remote_retrieve_body( $request );
-	}
-
-	/**
-	 * Get license defaults
-	 *
-	 * @param string $action            Action to license defaults.
-	 * @param bool   $software_version Software version.
-	 * @return array
-	 */
-	private function get_license_defaults( $action, $software_version = false ) {
-		$api_key    = get_option( $this->get_option_key( 'apikey' ) );
-		$product_id = get_option( $this->get_option_key( 'product_id' ) );
-
-		$defaults = array(
-			'wc_am_action' => $action,
-			'api_key'      => $api_key,
-			'product_id'   => $product_id,
-			'instance'     => get_option( $this->get_option_key( 'instance' ) ),
-			'object'       => str_ireplace( array( 'http://', 'https://' ), '', home_url() ),
-		);
-
-		if ( $software_version ) {
-			$defaults['software_version'] = $this->options['version'];
-		}
-
-		return $defaults;
-	}
-
-	/**
-	 * Builds the URL containing the API query string.
-	 *
-	 * @param array $args Arguments data.
-	 * @return string
-	 */
-	public function create_software_api_url( $args ) {
-		return add_query_arg( 'wc-api', 'wc-am-api', $this->options['api_url'] ) . '&' . http_build_query( $args );
-	}
-
-	/**
-	 * Generate the default data.
-	 */
-	public function license_instance_activation() {
-		$instance_exists = get_option( $this->get_option_key( 'instance' ) );
-
-		if ( ! $instance_exists ) {
-			update_option( $this->get_option_key( 'instance' ), wp_generate_password( 20, false ) );
-		}
-	}
-
-	/**
-	 * Deactivate the current API Key before activating the new API Key
-	 *
-	 * @param string $current_api_key Current api key.
-	 */
-	public function replace_license_key( $current_api_key ) {
-		$args = array(
-			'api_key' => $current_api_key,
-		);
-
-		$this->license_deactivate( $args );
-	}
-
-	/**
-	 * Sends and receives data to and from the server API
-	 *
-	 * @param array $args Arguments for query.
-	 * @return bool|string
-	 */
-	public function send_query( $args ) {
-		$target_url = esc_url_raw( add_query_arg( 'wc-api', 'wc-am-api', $this->options['api_url'] ) . '&' . http_build_query( $args ) );
-		$request    = wp_safe_remote_post( $target_url, array( 'timeout' => 15 ) );
-
-		if ( is_wp_error( $request ) || 200 !== wp_remote_retrieve_response_code( $request ) ) {
 			return false;
 		}
 
-		$response = wp_remote_retrieve_body( $request );
-		return ! empty( $response ) ? $response : false;
+		return 'Activated' === get_option( $this->get_option_key( 'activated' ) );
 	}
 
 	/**
@@ -623,43 +519,35 @@ class License {
 			return $transient;
 		}
 
-		$args = array(
-			'wc_am_action' => 'update',
-			'slug'         => $this->options['plugin_slug'],
-			'plugin_name'  => $this->options['plugin_name'],
-			'version'      => $this->options['version'],
-			'product_id'   => get_option( $this->get_option_key( 'product_id' ) ),
-			'api_key'      => get_option( $this->get_option_key( 'apikey' ) ),
-			'instance'     => get_option( $this->get_option_key( 'instance' ) ),
-		);
+		$license_key = get_option( $this->get_option_key( 'apikey' ) );
 
-		$response = json_decode( $this->send_query( $args ), true );
-
-		if ( isset( $response['data']['error_code'] ) ) {
-			add_settings_error( 'license_error', 'license_client_error', $response['data']['error'], 'error' );
+		if ( empty( $license_key ) || ! $this->get_api_key_status() ) {
+			return $transient;
 		}
 
-		if ( false !== $response && true === $response['success'] ) {
-			$new_version  = (string) $response['data']['package']['new_version'];
-			$curr_version = (string) $this->options['version'];
+		$response = $this->api_request( 'products/update', $license_key, array(), 'GET' );
 
+		if ( is_wp_error( $response ) || empty( $response->data ) ) {
+			return $transient;
+		}
+
+		$new_version  = isset( $response->data->version ) ? (string) $response->data->version : '';
+		$curr_version = (string) $this->options['version'];
+
+		if ( ! empty( $new_version ) && ! empty( $curr_version ) && version_compare( $new_version, $curr_version, '>' ) ) {
 			$package = array(
-				'id'             => $response['data']['package']['id'],
-				'slug'           => $response['data']['package']['slug'],
-				'plugin'         => $response['data']['package']['plugin'],
-				'new_version'    => $response['data']['package']['new_version'],
-				'url'            => $response['data']['package']['url'],
-				'tested'         => $response['data']['package']['tested'],
-				'package'        => $response['data']['package']['package'],
-				'upgrade_notice' => $response['data']['package']['upgrade_notice'],
+				'id'             => isset( $response->data->id ) ? $response->data->id : '',
+				'slug'           => isset( $response->data->slug ) ? $response->data->slug : $this->options['plugin_slug'],
+				'plugin'         => $this->options['plugin_name'],
+				'new_version'    => $new_version,
+				'url'            => isset( $response->data->url ) ? $response->data->url : '',
+				'tested'         => isset( $response->data->tested ) ? $response->data->tested : '',
+				'package'        => isset( $response->data->download_url ) ? $response->data->download_url : '',
+				'upgrade_notice' => isset( $response->data->upgrade_notice ) ? $response->data->upgrade_notice : '',
 			);
 
-			if ( ! empty( $new_version ) && ! empty( $curr_version ) ) {
-				if ( version_compare( $new_version, $curr_version, '>' ) ) {
-					$transient->response[ $this->options['plugin_name'] ] = (object) $package;
-					unset( $transient->no_update[ $this->options['plugin_name'] ] );
-				}
-			}
+			$transient->response[ $this->options['plugin_name'] ] = (object) $package;
+			unset( $transient->no_update[ $this->options['plugin_name'] ] );
 		}
 
 		return $transient;
@@ -674,31 +562,41 @@ class License {
 	 * @return object
 	 */
 	public function information_request( $result, $action, $args ) {
-		if ( isset( $args->slug ) ) {
-			if ( $this->options['plugin_slug'] !== $args->slug ) {
-				return $result;
-			}
-		} else {
+		if ( ! isset( $args->slug ) || $this->options['plugin_slug'] !== $args->slug ) {
 			return $result;
 		}
 
-		$query_args = array(
-			'wc_am_action' => 'plugininformation',
-			'plugin_name'  => $this->options['plugin_slug'],
-			'version'      => $this->options['version'],
-			'product_id'   => get_option( $this->get_option_key( 'product_id' ) ),
-			'api_key'      => get_option( $this->get_option_key( 'apikey' ) ),
-			'instance'     => get_option( $this->get_option_key( 'instance' ) ),
-			'object'       => str_ireplace( array( 'http://', 'https://' ), '', home_url() ),
-		);
+		$license_key = get_option( $this->get_option_key( 'apikey' ) );
 
-		$response = unserialize( $this->send_query( $query_args ) );
-
-		if ( isset( $response ) && is_object( $response ) && false !== $response ) {
-			return $response;
+		if ( empty( $license_key ) ) {
+			return $result;
 		}
 
-		return $result;
+		$response = $this->api_request( 'products/update', $license_key, array(), 'GET' );
+
+		if ( is_wp_error( $response ) || empty( $response->data ) ) {
+			return $result;
+		}
+
+		$data = $response->data;
+
+		return (object) array(
+			'name'          => isset( $data->name ) ? $data->name : $this->options['name'],
+			'slug'          => isset( $data->slug ) ? $data->slug : $this->options['plugin_slug'],
+			'version'       => isset( $data->version ) ? $data->version : '',
+			'author'        => isset( $data->author ) ? $data->author : '',
+			'homepage'      => isset( $data->homepage ) ? $data->homepage : '',
+			'requires'      => isset( $data->requires ) ? $data->requires : '',
+			'tested'        => isset( $data->tested ) ? $data->tested : '',
+			'requires_php'  => isset( $data->requires_php ) ? $data->requires_php : '',
+			'last_updated'  => isset( $data->released_at ) ? $data->released_at : '',
+			'sections'      => array(
+				'description' => isset( $data->description ) ? $data->description : '',
+				'changelog'   => isset( $data->changelog ) ? $data->changelog : '',
+			),
+			'download_link' => isset( $data->download_url ) ? $data->download_url : '',
+			'banners'       => array(),
+		);
 	}
 
 	/**
@@ -710,7 +608,7 @@ class License {
 		}
 
 		if ( defined( 'WP_HTTP_BLOCK_EXTERNAL' ) && true === WP_HTTP_BLOCK_EXTERNAL ) {
-			$host = parse_url( $this->options['api_url'], PHP_URL_HOST );
+			$host = wp_parse_url( $this->options['api_url'], PHP_URL_HOST );
 
 			if ( ! defined( 'WP_ACCESSIBLE_HOSTS' ) || false === stristr( WP_ACCESSIBLE_HOSTS, $host ) ) {
 				?>
