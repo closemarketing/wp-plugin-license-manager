@@ -220,6 +220,9 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
+### 1.1.1
+- Add support to FormsCRM plugins.
+
 ### 1.1.0
 - **Breaking Change**: Migrated from WooCommerce API Manager to Enwikuna License Manager
 - New required options: `rest_api_key`, `rest_api_secret`, `product_uuid`
