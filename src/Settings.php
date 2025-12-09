@@ -1,14 +1,14 @@
 <?php
 /**
- * Settings Page Renderer
+ * FormsCRM Settings Renderer
  *
- * Handles all the HTML/form rendering for license settings.
- * This class can be used standalone or integrated into existing settings pages.
+ * Renders FormsCRM-style license settings UI with modern design.
+ * This class provides a consistent UI across all FormsCRM plugins.
  *
  * @package    Closemarketing\WPLicenseManager
  * @author     David Perez <david@closemarketing.es>
- * @copyright  2019 Closemarketing
- * @version    2.0.0
+ * @copyright  2024 Closemarketing
+ * @version    1.0.0
  */
 
 namespace Closemarketing\WPLicenseManager;
@@ -16,11 +16,11 @@ namespace Closemarketing\WPLicenseManager;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Settings Class
+ * FormsCRM Settings Class
  *
- * Provides ready-to-use settings page rendering.
+ * Provides FormsCRM-branded settings page rendering.
  *
- * @since 2.0.0
+ * @since 1.2.0
  */
 class Settings {
 	/**
@@ -43,17 +43,17 @@ class Settings {
 	 * @var array
 	 */
 	private $default_options = array(
-		'page_title'       => 'License Settings',
-		'menu_title'       => 'License',
-		'menu_slug'        => 'license-settings',
-		'capability'       => 'manage_options',
-		'parent_slug'      => 'options-general.php', // Settings submenu.
-		'icon_url'         => 'dashicons-admin-network',
-		'position'         => null,
-		'show_header'      => true,
-		'show_tabs'        => false,
-		'custom_css'       => true,
-		'standalone_page'  => false, // If true, creates its own menu page.
+		'title'        => 'License Management',
+		'description'  => 'Manage your license to receive updates and support.',
+		'plugin_name'  => '',
+		'purchase_url' => 'https://close.technology/',
+		'renew_url'    => 'https://close.technology/my-account/',
+		'benefits'     => array(
+			'Automatic plugin updates',
+			'Access to new features',
+			'Priority support',
+			'Security patches',
+		),
 	);
 
 	/**
@@ -66,389 +66,285 @@ class Settings {
 		$this->license = $license;
 		$this->options = wp_parse_args( $options, $this->default_options );
 
-		$this->init_hooks();
-	}
-
-	/**
-	 * Initialize hooks
-	 */
-	private function init_hooks() {
-		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
-
-		if ( $this->options['custom_css'] ) {
-			add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_styles' ) );
+		// Set plugin name from license if not provided.
+		if ( empty( $this->options['plugin_name'] ) ) {
+			$this->options['plugin_name'] = $this->license->get_plugin_name();
 		}
+
+		// Register settings for settings_errors to work.
+		add_action( 'admin_init', array( $this, 'register_settings' ), 10 );
+
+		// Handle form submission.
+		add_action( 'admin_init', array( $this, 'handle_form_submission' ), 20 );
 	}
 
 	/**
-	 * Add settings page to WordPress admin
-	 */
-	public function add_settings_page() {
-		if ( $this->options['standalone_page'] ) {
-			// Add as top-level menu.
-			add_menu_page(
-				$this->options['page_title'],
-				$this->options['menu_title'],
-				$this->options['capability'],
-				$this->options['menu_slug'],
-				array( $this, 'render_settings_page' ),
-				$this->options['icon_url'],
-				$this->options['position']
-			);
-		} else {
-			// Add as submenu.
-			add_submenu_page(
-				$this->options['parent_slug'],
-				$this->options['page_title'],
-				$this->options['menu_title'],
-				$this->options['capability'],
-				$this->options['menu_slug'],
-				array( $this, 'render_settings_page' )
-			);
-		}
-	}
-
-	/**
-	 * Register settings
+	 * Register settings for settings_errors to work
+	 *
+	 * @return void
 	 */
 	public function register_settings() {
-		$option_group = $this->license->get_option_group();
-		$section_id   = $this->license->get_settings_section();
-
-		register_setting( $option_group, $option_group );
-
-		add_settings_section(
-			$option_group,
-			'',
-			array( $this, 'render_section_description' ),
-			$section_id
-		);
-
-		// API Key field.
-		add_settings_field(
-			'license_apikey',
-			__( 'License API Key', $this->license->get_text_domain() ),
-			array( $this, 'render_apikey_field' ),
-			$section_id,
-			$option_group
-		);
-
-		// Product ID field.
-		add_settings_field(
-			'license_product_id',
-			__( 'Product ID', $this->license->get_text_domain() ),
-			array( $this, 'render_product_id_field' ),
-			$section_id,
-			$option_group
-		);
-
-		// Status field.
-		add_settings_field(
-			'license_status',
-			__( 'License Status', $this->license->get_text_domain() ),
-			array( $this, 'render_status_field' ),
-			$section_id,
-			$option_group
-		);
-
-		// Deactivate checkbox.
-		add_settings_field(
-			'license_deactivate',
-			__( 'Deactivate License', $this->license->get_text_domain() ),
-			array( $this, 'render_deactivate_field' ),
-			$section_id,
-			$option_group
+		// Register the option group to allow settings_errors to work.
+		register_setting(
+			$this->license->get_option_group(),
+			$this->license->get_option_group()
 		);
 	}
 
 	/**
-	 * Render section description
+	 * Handle form submission
+	 *
+	 * @return void
 	 */
-	public function render_section_description() {
-		?>
-		<p><?php esc_html_e( 'Enter your license information to activate automatic updates and support.', $this->license->get_text_domain() ); ?></p>
-		<?php
-	}
-
-	/**
-	 * Render API Key field
-	 */
-	public function render_apikey_field() {
-		$value = $this->license->get_option_value( 'apikey' );
-		?>
-		<input type="text" 
-			   name="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>" 
-			   id="license_apikey" 
-			   value="<?php echo esc_attr( $value ); ?>" 
-			   class="regular-text">
-		<p class="description">
-			<?php esc_html_e( 'Enter your license API key. You can find this in your account dashboard.', $this->license->get_text_domain() ); ?>
-		</p>
-		<?php
-	}
-
-	/**
-	 * Render Product ID field
-	 */
-	public function render_product_id_field() {
-		$value = $this->license->get_option_value( 'product_id' );
-		?>
-		<input type="text" 
-			   name="<?php echo esc_attr( $this->license->get_option_key( 'product_id' ) ); ?>" 
-			   id="license_product_id" 
-			   value="<?php echo esc_attr( $value ); ?>" 
-			   class="regular-text">
-		<p class="description">
-			<?php esc_html_e( 'Enter the product ID associated with your license.', $this->license->get_text_domain() ); ?>
-		</p>
-		<?php
-	}
-
-	/**
-	 * Render Status field
-	 */
-	public function render_status_field() {
-		$is_active = $this->license->is_license_active();
-		$status_class = $is_active ? 'license-status-active' : 'license-status-inactive';
-		$status_text  = $is_active ? __( 'Activated', $this->license->get_text_domain() ) : __( 'Deactivated', $this->license->get_text_domain() );
-		?>
-		<span class="<?php echo esc_attr( $status_class ); ?>">
-			<?php echo esc_html( $status_text ); ?>
-		</span>
-		<?php if ( $is_active ) : ?>
-			<span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-		<?php else : ?>
-			<span class="dashicons dashicons-dismiss" style="color: #d63638;"></span>
-		<?php endif; ?>
-		<?php
-	}
-
-	/**
-	 * Render Deactivate field
-	 */
-	public function render_deactivate_field() {
-		$checked = get_option( $this->license->get_option_key( 'deactivate_checkbox' ) );
-		?>
-		<label>
-			<input type="checkbox" 
-				   name="<?php echo esc_attr( $this->license->get_option_key( 'deactivate_checkbox' ) ); ?>" 
-				   id="license_deactivate_checkbox" 
-				   value="on" 
-				   <?php checked( $checked, 'on' ); ?>>
-			<?php esc_html_e( 'Check this box to deactivate the license on this site.', $this->license->get_text_domain() ); ?>
-		</label>
-		<p class="description">
-			<?php esc_html_e( 'Deactivating allows you to use the license on another site.', $this->license->get_text_domain() ); ?>
-		</p>
-		<?php
-	}
-
-	/**
-	 * Render the complete settings page
-	 */
-	public function render_settings_page() {
-		if ( ! current_user_can( $this->options['capability'] ) ) {
-			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', $this->license->get_text_domain() ) );
+	public function handle_form_submission() {
+		// Check if form was submitted.
+		if ( ! isset( $_POST['submit_license'] ) ) {
+			return;
 		}
+
+		// Check if we're on the correct page.
+		if ( ! isset( $_GET['page'] ) || 'connect_ecommerce' !== $_GET['page'] ) {
+			return;
+		}
+
+		// Verify nonce.
+		if ( ! isset( $_POST['license_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['license_nonce'] ) ), 'Update_License_Options' ) ) {
+			wp_die( esc_html__( 'Security check failed.', $this->license->get_text_domain() ) );
+		}
+
+		// Check user capability.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// Prepare input array for validate_license.
+		$apikey_key = $this->license->get_option_key( 'apikey' );
+		$input      = array();
+
+		// Get license key from POST.
+		if ( isset( $_POST[ $apikey_key ] ) ) {
+			$input[ $apikey_key ] = sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) );
+		} else {
+			// If no key in POST, get current key to preserve it.
+			$input[ $apikey_key ] = $this->license->get_option_value( 'apikey' );
+		}
+
+		// Get deactivate checkbox from POST.
+		$deactivate_key = $this->license->get_option_key( 'deactivate_checkbox' );
+		if ( isset( $_POST[ $deactivate_key ] ) && 'on' === $_POST[ $deactivate_key ] ) {
+			$input[ $deactivate_key ] = 'on';
+		}
+
+		// Validate and process license (this will save the key and status).
+		$this->license->validate_license( $input );
+
+		// Redirect to prevent form resubmission and show updated status.
+		$current_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'connect-woocommerce-neo-license';
+		$redirect_url = add_query_arg(
+			array(
+				'page'  => 'connect_ecommerce',
+				'tab'   => $current_tab,
+				'settings-updated' => 'true',
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * Render the complete settings UI
+	 *
+	 * @return void
+	 */
+	public function render() {
+		// Get license status data.
+		$status_data = $this->get_license_status_data();
+		$this->show_styles();
+
+		// Show settings errors if any.
+		settings_errors();
 		?>
-		<div class="wrap license-settings-wrap">
-			<?php if ( $this->options['show_header'] ) : ?>
-				<h1><?php echo esc_html( $this->options['page_title'] ); ?></h1>
-			<?php endif; ?>
-
-			<?php settings_errors(); ?>
-
-			<div class="license-settings-container">
-				<div class="license-settings-main">
-					<form method="post" action="options.php">
-						<?php
-						settings_fields( $this->license->get_option_group() );
-						do_settings_sections( $this->license->get_settings_section() );
-						wp_nonce_field( 'Update_License_Options', 'license_nonce' );
-						submit_button( __( 'Save License Settings', $this->license->get_text_domain() ) );
-						?>
-					</form>
+		<div class="wplm-license-wrapper">
+			<div class="wplm-card">
+				<div class="wplm-card-header">
+					<h2><?php echo esc_html( $this->options['title'] ); ?></h2>
+					<p><?php echo esc_html( $this->options['description'] ); ?></p>
 				</div>
 
-				<div class="license-settings-sidebar">
-					<?php $this->render_sidebar(); ?>
-				</div>
+				<form method="post" action="" class="wplm-license-form">
+					<?php wp_nonce_field( 'Update_License_Options', 'license_nonce' ); ?>
+
+					<div class="wplm-form-group">
+						<label for="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>" class="wplm-label">
+							<?php echo esc_html__( 'License Key', $this->license->get_text_domain() ); ?>
+						</label>
+						<div class="wplm-input-group">
+							<input 
+								type="text"
+								id="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
+								name="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
+								value="<?php echo esc_attr( $status_data['license_key'] ); ?>"
+								placeholder="<?php echo esc_attr__( 'Enter your license key', $this->license->get_text_domain() ); ?>"
+								class="wplm-input"
+								<?php echo 'active' === $status_data['status'] ? 'readonly' : ''; ?>
+							/>
+							<?php if ( 'active' === $status_data['status'] ) : ?>
+								<label class="wplm-deactivate-label">
+									<input type="checkbox" name="<?php echo esc_attr( $this->license->get_option_key( 'deactivate_checkbox' ) ); ?>" value="on" />
+									<span><?php echo esc_html__( 'Deactivate', $this->license->get_text_domain() ); ?></span>
+								</label>
+							<?php endif; ?>
+						</div>
+						<p class="wplm-help-text">
+							<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
+						</p>
+					</div>
+
+					<div class="wplm-form-group">
+						<label class="wplm-label"><?php echo esc_html__( 'License Status', $this->license->get_text_domain() ); ?></label>
+						<div class="wplm-status-box <?php echo esc_attr( $status_data['status_class'] ); ?>">
+							<span class="wplm-status-icon"><?php echo $status_data['status_icon']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+							<span class="wplm-status-text"><?php echo esc_html( $status_data['status_text'] ); ?></span>
+						</div>
+					</div>
+
+					<?php if ( empty( $status_data['license_key'] ) ) : ?>
+						<div class="wplm-notice wplm-notice-info">
+							<p>
+								<?php
+								printf(
+									/* translators: %s: purchase link */
+									esc_html__( 'Don\'t have a license? %s to get started.', $this->license->get_text_domain() ),
+									'<a href="' . esc_url( $this->options['purchase_url'] ) . '" target="_blank" rel="noopener noreferrer">' . sprintf(
+										/* translators: %s: plugin name */
+										esc_html__( 'Purchase %s', $this->license->get_text_domain() ),
+										esc_html( $this->options['plugin_name'] )
+									) . '</a>'
+								);
+								?>
+							</p>
+						</div>
+					<?php endif; ?>
+
+					<?php if ( 'expired' === $status_data['status'] ) : ?>
+						<div class="wplm-notice wplm-notice-error">
+							<p>
+								<?php
+								printf(
+									/* translators: %s: renewal link */
+									esc_html__( 'Your license has expired. %s to continue receiving updates and support.', $this->license->get_text_domain() ),
+									'<a href="' . esc_url( $this->options['renew_url'] ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Renew your license', $this->license->get_text_domain() ) . '</a>'
+								);
+								?>
+							</p>
+						</div>
+					<?php endif; ?>
+
+					<div class="wplm-form-actions">
+						<button type="submit" name="submit_license" class="wplm-button wplm-button-primary">
+							<?php echo 'active' === $status_data['status'] ? esc_html__( 'Update License', $this->license->get_text_domain() ) : esc_html__( 'Activate License', $this->license->get_text_domain() ); ?>
+						</button>
+					</div>
+				</form>
+			</div>
+
+			<div class="wplm-info-card">
+				<h3><?php echo esc_html__( 'What is the license for?', $this->license->get_text_domain() ); ?></h3>
+				<p>
+					<?php
+					printf(
+						/* translators: %s: Plugin name */
+						esc_html__( 'A valid license key is required to receive %s updates and support.', $this->license->get_text_domain() ),
+						'<strong>' . esc_html( $this->options['plugin_name'] ) . '</strong>'
+					);
+					?>
+				</p>
+				<ul class="wplm-benefits-list">
+					<?php foreach ( $this->options['benefits'] as $benefit ) : ?>
+						<li><?php echo esc_html( $benefit ); ?></li>
+					<?php endforeach; ?>
+				</ul>
 			</div>
 		</div>
 		<?php
 	}
 
 	/**
-	 * Render sidebar with helpful information
+	 * Get license status data
+	 *
+	 * Returns an array with all status-related information.
+	 *
+	 * @return array
 	 */
-	private function render_sidebar() {
-		?>
-		<div class="license-info-box">
-			<h3><?php esc_html_e( 'License Information', $this->license->get_text_domain() ); ?></h3>
-			<p>
-				<?php
-				printf(
-					// translators: %s: Plugin name.
-					esc_html__( 'Your license key provides access to automatic updates and support for %s.', $this->license->get_text_domain() ),
-					'<strong>' . esc_html( $this->license->get_plugin_name() ) . '</strong>'
-				);
-				?>
-			</p>
-		</div>
+	private function get_license_status_data() {
+		$license_key     = $this->license ? $this->license->get_option_value( 'apikey' ) : '';
+		$activated_value = $this->license ? $this->license->get_option_value( 'activated' ) : 'Deactivated';
 
-		<div class="license-info-box">
-			<h3><?php esc_html_e( 'Instance ID', $this->license->get_text_domain() ); ?></h3>
-			<p>
-				<code><?php echo esc_html( $this->license->get_option_value( 'instance' ) ); ?></code>
-			</p>
-			<p class="description">
-				<?php esc_html_e( 'This unique identifier is used to track activations.', $this->license->get_text_domain() ); ?>
-			</p>
-		</div>
+		// Determine license status.
+		$license_status = 'inactive';
+		if ( 'Activated' === $activated_value ) {
+			$license_status = 'active';
+		} elseif ( 'Expired' === $activated_value ) {
+			$license_status = 'expired';
+		}
 
-		<div class="license-info-box">
-			<h3><?php esc_html_e( 'Need Help?', $this->license->get_text_domain() ); ?></h3>
-			<ul class="license-help-links">
-				<li>
-					<span class="dashicons dashicons-book"></span>
-					<a href="<?php echo esc_url( $this->get_documentation_url() ); ?>" target="_blank">
-						<?php esc_html_e( 'Documentation', $this->license->get_text_domain() ); ?>
-					</a>
-				</li>
-				<li>
-					<span class="dashicons dashicons-sos"></span>
-					<a href="<?php echo esc_url( $this->get_support_url() ); ?>" target="_blank">
-						<?php esc_html_e( 'Support', $this->license->get_text_domain() ); ?>
-					</a>
-				</li>
-				<li>
-					<span class="dashicons dashicons-admin-users"></span>
-					<a href="<?php echo esc_url( $this->get_account_url() ); ?>" target="_blank">
-						<?php esc_html_e( 'My Account', $this->license->get_text_domain() ); ?>
-					</a>
-				</li>
-			</ul>
-		</div>
-		<?php
+		$status_text  = '';
+		$status_class = '';
+		$status_icon  = '';
+
+		switch ( $license_status ) {
+			case 'active':
+				$status_text  = __( 'Active', $this->license->get_text_domain() );
+				$status_class = 'wplm-status-active';
+				$status_icon  = $this->get_status_icon( 'active' );
+				break;
+			case 'expired':
+				$status_text  = __( 'Expired', $this->license->get_text_domain() );
+				$status_class = 'wplm-status-expired';
+				$status_icon  = $this->get_status_icon( 'expired' );
+				break;
+			default:
+				$status_text  = __( 'Not Activated', $this->license->get_text_domain() );
+				$status_class = 'wplm-status-inactive';
+				$status_icon  = $this->get_status_icon( 'inactive' );
+				break;
+		}
+
+		return array(
+			'license_key'  => $license_key,
+			'status'       => $license_status,
+			'status_text'  => $status_text,
+			'status_class' => $status_class,
+			'status_icon'  => $status_icon,
+		);
 	}
 
 	/**
-	 * Enqueue custom CSS
+	 * Get status icon SVG
 	 *
-	 * @param string $hook Current admin page hook.
+	 * @param string $status Status type (active, expired, inactive).
+	 * @return string SVG icon HTML.
 	 */
-	public function enqueue_styles( $hook ) {
-		// Only enqueue on our settings page.
-		$allowed_hooks = array(
-			'settings_page_' . $this->options['menu_slug'],
-			'toplevel_page_' . $this->options['menu_slug'],
+	private function get_status_icon( $status ) {
+		$icons = array(
+			'active'   => '<svg class="fcod-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>',
+			'expired'  => '<svg class="fcod-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>',
+			'inactive' => '<svg class="fcod-icon" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>',
 		);
 
-		if ( ! in_array( $hook, $allowed_hooks, true ) ) {
-			return;
-		}
-
-		// Inline CSS.
-		$css = '
-		.license-settings-wrap {
-			max-width: 1200px;
-		}
-		.license-settings-container {
-			display: grid;
-			grid-template-columns: 2fr 1fr;
-			gap: 20px;
-			margin-top: 20px;
-		}
-		.license-settings-main {
-			background: #fff;
-			padding: 20px;
-			border: 1px solid #ccd0d4;
-			box-shadow: 0 1px 1px rgba(0,0,0,.04);
-		}
-		.license-settings-sidebar {
-			display: flex;
-			flex-direction: column;
-			gap: 20px;
-		}
-		.license-info-box {
-			background: #fff;
-			padding: 20px;
-			border: 1px solid #ccd0d4;
-			box-shadow: 0 1px 1px rgba(0,0,0,.04);
-		}
-		.license-info-box h3 {
-			margin-top: 0;
-			padding-bottom: 10px;
-			border-bottom: 1px solid #dcdcde;
-		}
-		.license-info-box code {
-			display: block;
-			padding: 8px;
-			background: #f0f0f1;
-			border-radius: 3px;
-			word-break: break-all;
-		}
-		.license-help-links {
-			list-style: none;
-			padding: 0;
-			margin: 0;
-		}
-		.license-help-links li {
-			padding: 8px 0;
-			border-bottom: 1px solid #f0f0f1;
-		}
-		.license-help-links li:last-child {
-			border-bottom: none;
-		}
-		.license-help-links .dashicons {
-			margin-right: 5px;
-			color: #2271b1;
-		}
-		.license-status-active {
-			color: #00a32a;
-			font-weight: bold;
-		}
-		.license-status-inactive {
-			color: #d63638;
-			font-weight: bold;
-		}
-		@media screen and (max-width: 782px) {
-			.license-settings-container {
-				grid-template-columns: 1fr;
-			}
-		}
-		';
-
-		wp_add_inline_style( 'wp-admin', $css );
+		return isset( $icons[ $status ] ) ? $icons[ $status ] : $icons['inactive'];
 	}
 
 	/**
-	 * Get documentation URL
+	 * Show styles
 	 *
-	 * @return string
+	 * @return void
 	 */
-	private function get_documentation_url() {
-		return apply_filters( 'license_manager_documentation_url', 'https://close.technology/docs/' );
-	}
-
-	/**
-	 * Get support URL
-	 *
-	 * @return string
-	 */
-	private function get_support_url() {
-		return apply_filters( 'license_manager_support_url', 'https://close.technology/support/' );
-	}
-
-	/**
-	 * Get account URL
-	 *
-	 * @return string
-	 */
-	private function get_account_url() {
-		return apply_filters( 'license_manager_account_url', 'https://close.technology/my-account/' );
+	private function show_styles() {
+		$css_file = __DIR__ . '/assets/license-settings.css';
+		if ( file_exists( $css_file ) ) {
+			echo '<style>' . file_get_contents( $css_file ) . '</style>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
 	}
 }
-
-
