@@ -220,7 +220,7 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
-### 1.1.1
+### 1.1.1-1.1.2
 - Add support to FormsCRM plugins.
 
 ### 1.1.0
