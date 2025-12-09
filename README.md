@@ -220,6 +220,10 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
+### 1.2.0
+- Clean code.
+- Unify Libraries and have styles.
+
 ### 1.1.1-1.1.2
 - Add support to FormsCRM plugins.
 

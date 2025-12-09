@@ -46,11 +46,6 @@ class License {
 		'text_domain'       => 'default',    // Text domain for translations.
 		'plugin_slug'       => '',           // Plugin slug for updates.
 		'plugin_name'       => '',           // Plugin name for updates.
-		'settings_page'     => '',           // Settings page slug.
-		'settings_tabs'     => '',           // Action for settings tabs.
-		'settings_content'  => '',           // Action for settings content.
-		'option_group'      => '',           // Option group for settings.
-		'settings_section'  => '',           // Settings section ID.
 		'capabilities'      => 'manage_options', // Required capability.
 	);
 
@@ -97,18 +92,6 @@ class License {
 			$this->options['plugin_name'] = plugin_basename( $this->options['file'] );
 		}
 
-		if ( empty( $this->options['settings_page'] ) ) {
-			$this->options['settings_page'] = $this->options['slug'] . '_settings';
-		}
-
-		if ( empty( $this->options['settings_tabs'] ) ) {
-			$this->options['settings_tabs'] = $this->options['slug'] . '_settings_tabs';
-		}
-
-		if ( empty( $this->options['settings_content'] ) ) {
-			$this->options['settings_content'] = $this->options['slug'] . '_settings_tabs_content';
-		}
-
 		if ( empty( $this->options['option_group'] ) ) {
 			$this->options['option_group'] = $this->options['slug'] . '_license';
 		}
@@ -124,11 +107,6 @@ class License {
 	 * @return void
 	 */
 	private function init_hooks() {
-		// Settings tabs and content.
-		add_action( $this->options['settings_tabs'], array( $this, 'add_settings_tab' ) );
-		add_action( $this->options['settings_content'], array( $this, 'add_license_content' ) );
-		add_action( 'admin_init', array( $this, 'page_init' ) );
-
 		// Check for external blocking.
 		add_action( 'admin_notices', array( $this, 'check_external_blocking' ) );
 
@@ -188,178 +166,6 @@ class License {
 	}
 
 	/**
-	 * Add settings tab.
-	 *
-	 * @param string $active_tab Active tab.
-	 */
-	public function add_settings_tab( $active_tab ) {
-		?>
-		<a href="?page=<?php echo esc_attr( $this->options['settings_page'] ); ?>&tab=license" class="nav-tab <?php echo 'license' === $active_tab ? 'nav-tab-active' : ''; ?>">
-			<?php esc_html_e( 'License', $this->options['text_domain'] ); ?>
-		</a>
-		<?php
-	}
-
-	/**
-	 * Add settings tab content.
-	 *
-	 * @param string $active_tab Active tab.
-	 */
-	public function add_license_content( $active_tab ) {
-		if ( 'license' !== $active_tab ) {
-			return;
-		}
-
-		echo '<div class="license-manager-settings">';
-		echo '<div class="license">';
-
-		echo '<form method="post" action="options.php">';
-		settings_fields( $this->options['option_group'] );
-		do_settings_sections( $this->options['settings_section'] );
-		wp_nonce_field( 'Update_License_Options', 'license_nonce' );
-		submit_button(
-			__( 'Save', $this->options['text_domain'] ),
-			'primary',
-			'submit_license'
-		);
-		echo '</form>';
-
-		echo '</div>';
-		echo '<div class="settings">';
-		echo '<h2>' . esc_html__( 'What is the license for?', $this->options['text_domain'] ) . '</h2>';
-		echo '<p>';
-		echo sprintf(
-			// translators: %s Name of plugin.
-			esc_html__( 'With the license, you\'ll have updates and automatic fixes to what\'s new or change in your system, so you\'ll always have the latest functionalities for %s.', $this->options['text_domain'] ),
-			'<strong>' . esc_html( $this->options['name'] ) . '</strong>'
-		);
-		echo '</p>';
-		echo '</div></div>';
-	}
-
-	/**
-	 * Page init - Register settings
-	 */
-	public function page_init() {
-		register_setting(
-			$this->options['option_group'],
-			$this->options['option_group'],
-			array( $this, 'sanitize_fields_license' )
-		);
-
-		add_settings_section(
-			$this->options['option_group'],
-			'',
-			'',
-			$this->options['settings_section']
-		);
-
-		add_settings_field(
-			$this->get_option_key( 'apikey' ),
-			__( 'License Key', $this->options['text_domain'] ),
-			array( $this, 'license_apikey_callback' ),
-			$this->options['settings_section'],
-			$this->options['option_group']
-		);
-
-		add_settings_field(
-			$this->get_option_key( 'status' ),
-			__( 'License Status', $this->options['text_domain'] ),
-			array( $this, 'license_status_callback' ),
-			$this->options['settings_section'],
-			$this->options['option_group']
-		);
-
-		add_settings_field(
-			$this->get_option_key( 'deactivate' ),
-			__( 'Deactivate License', $this->options['text_domain'] ),
-			array( $this, 'license_deactivate_callback' ),
-			$this->options['settings_section'],
-			$this->options['option_group']
-		);
-	}
-
-	/**
-	 * Sanitize fields before saves in DB
-	 *
-	 * @param array $input Input fields.
-	 * @return array
-	 */
-	public function sanitize_fields_license( $input ) {
-		$apikey_key = $this->get_option_key( 'apikey' );
-
-		if ( isset( $_POST[ $apikey_key ] ) ) {
-			$new_api_key = sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) );
-			update_option( $apikey_key, $new_api_key );
-		}
-
-		$this->validate_license( $_POST );
-
-		return $input;
-	}
-
-	/**
-	 * Callback for Setting License API Key
-	 *
-	 * @return void
-	 */
-	public function license_apikey_callback() {
-		$value = get_option( $this->get_option_key( 'apikey' ) );
-		echo '<input type="text" class="regular-text" name="' . esc_attr( $this->get_option_key( 'apikey' ) ) . '" id="license_apikey" value="' . esc_attr( $value ) . '">';
-		echo '<p class="description">' . esc_html__( 'Enter your license key to activate the plugin.', $this->options['text_domain'] ) . '</p>';
-	}
-
-	/**
-	 * Callback for License status
-	 *
-	 * @return void
-	 */
-	public function license_status_callback() {
-		$license_key = get_option( $this->get_option_key( 'apikey' ) );
-		$status      = get_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-
-		if ( ! empty( $license_key ) && 'Activated' === $status ) {
-			// Verify with API.
-			$response = $this->api_request( 'licenses', $license_key, array(), 'GET' );
-
-			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
-				$api_status = isset( $response->data->status ) ? $response->data->status : '';
-				$expires_at = isset( $response->data->expires_at ) ? $response->data->expires_at : '';
-
-				if ( 'active' === $api_status ) {
-					echo '<span style="color: green; font-weight: bold;">' . esc_html__( 'Activated', $this->options['text_domain'] ) . '</span>';
-					if ( ! empty( $expires_at ) ) {
-						echo '<br><small>' . esc_html__( 'Expires:', $this->options['text_domain'] ) . ' ' . esc_html( $expires_at ) . '</small>';
-					}
-					update_option( $this->get_option_key( 'activated' ), 'Activated' );
-					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
-					return;
-				} elseif ( 'expired' === $api_status ) {
-					echo '<span style="color: orange; font-weight: bold;">' . esc_html__( 'Expired', $this->options['text_domain'] ) . '</span>';
-					update_option( $this->get_option_key( 'activated' ), 'Expired' );
-					return;
-				}
-			}
-		}
-
-		echo '<span style="color: red;">' . esc_html__( 'Deactivated', $this->options['text_domain'] ) . '</span>';
-	}
-
-	/**
-	 * Callback for deactivate checkbox
-	 *
-	 * @return void
-	 */
-	public function license_deactivate_callback() {
-		echo '<input type="checkbox" id="license_deactivate_checkbox" name="' . esc_attr( $this->get_option_key( 'deactivate_checkbox' ) ) . '" value="on"';
-		echo checked( get_option( $this->get_option_key( 'deactivate_checkbox' ) ), 'on' );
-		echo '/>';
-		echo '<span class="description">';
-		esc_html_e( 'Deactivates License so it can be used on another site.', $this->options['text_domain'] );
-		echo '</span>';
-	}
-
-	/**
 	 * Validates license option
 	 *
 	 * @param array $input Settings input option.
@@ -397,42 +203,62 @@ class License {
 			return array();
 		}
 
-		// Activate License.
-		if ( 'Deactivated' === $activation_status || empty( $activation_status ) || '' === $api_key || 'on' === $checkbox_status || $current_api_key !== $api_key ) {
+		// Save license key first if provided.
+		if ( ! empty( $api_key ) && $current_api_key !== $api_key ) {
+			update_option( $apikey_key, $api_key );
+		}
+
+		// Activate License if key changed or status is deactivated.
+		if ( ! empty( $api_key ) && ( 'Deactivated' === $activation_status || empty( $activation_status ) || 'on' === $checkbox_status || $current_api_key !== $api_key ) ) {
 			// Deactivate existing key if different.
-			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key && ! empty( $api_key ) ) {
+			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key ) {
 				$this->license_deactivate( $current_api_key );
 			}
 
-			if ( ! empty( $api_key ) ) {
-				$activation_result = $this->license_activate( $api_key );
+			$activation_result = $this->license_activate( $api_key );
 
-				if ( ! is_wp_error( $activation_result ) && ! empty( $activation_result->data ) ) {
-					$status = isset( $activation_result->data->status ) ? $activation_result->data->status : '';
+			if ( ! is_wp_error( $activation_result ) && ! empty( $activation_result->data ) ) {
+				$status = isset( $activation_result->data->status ) ? $activation_result->data->status : '';
 
-					if ( 'active' === $status ) {
-						$message = __( 'License activated successfully.', $this->options['text_domain'] );
-						add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
+				if ( 'active' === $status ) {
+					$message = __( 'License activated successfully.', $this->options['text_domain'] );
+					add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
 
-						// Update license key and status.
-						update_option( $apikey_key, $api_key );
-						update_option( $this->get_option_key( 'activated' ), 'Activated' );
-						update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+					// Update license key and status.
+					update_option( $apikey_key, $api_key );
+					update_option( $this->get_option_key( 'activated' ), 'Activated' );
+					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
 
-						return array(
-							'status'  => 'ok',
-							'message' => $message,
-						);
-					}
+					return array(
+						'status'  => 'ok',
+						'message' => $message,
+					);
+				} elseif ( 'expired' === $status ) {
+					$message = __( 'License has expired.', $this->options['text_domain'] );
+					add_settings_error( 'license_expired', 'expired_msg', $message, 'error' );
+					update_option( $apikey_key, $api_key );
+					update_option( $this->get_option_key( 'activated' ), 'Expired' );
+					return array();
 				}
+			}
 
-				if ( is_wp_error( $activation_result ) ) {
-					add_settings_error( 'license_error', 'license_client_error', $activation_result->get_error_message(), 'error' );
-					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-				} else {
-					$message = esc_html__( 'The license key activation could not be completed.', $this->options['text_domain'] );
-					add_settings_error( 'not_activated', 'not_activated_error', $message );
-					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+			if ( is_wp_error( $activation_result ) ) {
+				add_settings_error( 'license_error', 'license_client_error', $activation_result->get_error_message(), 'error' );
+				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+			} else {
+				$message = esc_html__( 'The license key activation could not be completed.', $this->options['text_domain'] );
+				add_settings_error( 'not_activated', 'not_activated_error', $message );
+				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+			}
+		} elseif ( ! empty( $api_key ) && $current_api_key === $api_key && 'Activated' === $activation_status ) {
+			// Key is the same and already activated, just verify status.
+			$response = $this->api_request( 'licenses', $api_key, array(), 'GET' );
+			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
+				$api_status = isset( $response->data->status ) ? $response->data->status : '';
+				if ( 'active' === $api_status ) {
+					update_option( $this->get_option_key( 'activated' ), 'Activated' );
+				} elseif ( 'expired' === $api_status ) {
+					update_option( $this->get_option_key( 'activated' ), 'Expired' );
 				}
 			}
 		}
@@ -706,5 +532,14 @@ class License {
 	 */
 	public function get_api_url() {
 		return $this->options['api_url'];
+	}
+
+	/**
+	 * Get plugin file
+	 *
+	 * @return string
+	 */
+	public function get_plugin_file() {
+		return $this->options['file'];
 	}
 }
