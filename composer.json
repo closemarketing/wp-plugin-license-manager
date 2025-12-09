@@ -2,7 +2,6 @@
 	"name": "closemarketing/wp-plugin-license-manager",
 	"description": "WordPress Plugin License Manager Library - A reusable library for managing WordPress plugin licenses with Enwikuna License Manager",
 	"type": "library",
-	"version": "dev-main",
 	"keywords": [
 		"wordpress",
 		"license",
