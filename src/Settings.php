@@ -43,17 +43,20 @@ class Settings {
 	 * @var array
 	 */
 	private $default_options = array(
-		'title'        => 'License Management',
-		'description'  => 'Manage your license to receive updates and support.',
-		'plugin_name'  => '',
-		'purchase_url' => 'https://close.technology/',
-		'renew_url'    => 'https://close.technology/my-account/',
-		'benefits'     => array(
+		'title'         => 'License Management',
+		'description'   => 'Manage your license to receive updates and support.',
+		'plugin_name'   => '',
+		'purchase_url'  => 'https://close.technology/',
+		'renew_url'     => 'https://close.technology/my-account/',
+		'benefits'      => array(
 			'Automatic plugin updates',
 			'Access to new features',
 			'Priority support',
 			'Security patches',
 		),
+		'settings_page' => 'connect_ecommerce',
+		'default_tab'   => '',
+		'tab_param'     => 'tab',
 	);
 
 	/**
@@ -103,7 +106,29 @@ class Settings {
 		}
 
 		// Check if we're on the correct page.
-		if ( ! isset( $_GET['page'] ) || 'connect_ecommerce' !== $_GET['page'] ) {
+		$settings_page = isset( $this->options['settings_page'] ) ? $this->options['settings_page'] : 'connect_ecommerce';
+
+		// Get page from GET or POST (some forms submit to the same page without page in URL).
+		$current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : '';
+
+		// If no page in GET, try to get from referer or check if we're in admin.
+		if ( empty( $current_page ) && isset( $_SERVER['HTTP_REFERER'] ) ) {
+			$referer = esc_url_raw( wp_unslash( $_SERVER['HTTP_REFERER'] ) );
+			if ( preg_match( '/[?&]page=([^&]+)/', $referer, $matches ) ) {
+				$current_page = $matches[1];
+			}
+		}
+
+		// If still no page, but we have the settings_page option, assume we're on the right page.
+		// This handles cases where the form is embedded in a tab system.
+		if ( empty( $current_page ) && ! empty( $settings_page ) ) {
+			// Check if we're in admin and the form was submitted with the correct nonce.
+			if ( is_admin() && isset( $_POST['license_nonce'] ) ) {
+				$current_page = $settings_page;
+			}
+		}
+
+		if ( empty( $current_page ) || $settings_page !== $current_page ) {
 			return;
 		}
 
@@ -121,17 +146,26 @@ class Settings {
 		$apikey_key = $this->license->get_option_key( 'apikey' );
 		$input      = array();
 
+		// Get deactivate checkbox from POST first to check if we're deactivating.
+		$deactivate_key  = $this->license->get_option_key( 'deactivate_checkbox' );
+		$is_deactivating = isset( $_POST[ $deactivate_key ] ) && 'on' === $_POST[ $deactivate_key ];
+
 		// Get license key from POST.
-		if ( isset( $_POST[ $apikey_key ] ) ) {
+		if ( isset( $_POST[ $apikey_key ] ) && ! empty( $_POST[ $apikey_key ] ) ) {
 			$input[ $apikey_key ] = sanitize_text_field( wp_unslash( $_POST[ $apikey_key ] ) );
 		} else {
-			// If no key in POST, get current key to preserve it.
+			// If no key in POST or empty, get current key to preserve it (especially important for readonly fields).
+			$current_key          = $this->license->get_option_value( 'apikey' );
+			$input[ $apikey_key ] = ! empty( $current_key ) ? $current_key : '';
+		}
+
+		// If deactivating, ensure we have the current license key.
+		if ( $is_deactivating && empty( $input[ $apikey_key ] ) ) {
 			$input[ $apikey_key ] = $this->license->get_option_value( 'apikey' );
 		}
 
-		// Get deactivate checkbox from POST.
-		$deactivate_key = $this->license->get_option_key( 'deactivate_checkbox' );
-		if ( isset( $_POST[ $deactivate_key ] ) && 'on' === $_POST[ $deactivate_key ] ) {
+		// Add deactivate checkbox to input if present.
+		if ( $is_deactivating ) {
 			$input[ $deactivate_key ] = 'on';
 		}
 
@@ -139,15 +173,20 @@ class Settings {
 		$this->license->validate_license( $input );
 
 		// Redirect to prevent form resubmission and show updated status.
-		$current_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'connect-woocommerce-neo-license';
-		$redirect_url = add_query_arg(
-			array(
-				'page'  => 'connect_ecommerce',
-				'tab'   => $current_tab,
-				'settings-updated' => 'true',
-			),
-			admin_url( 'admin.php' )
+		$tab_param   = isset( $this->options['tab_param'] ) ? $this->options['tab_param'] : 'tab';
+		$default_tab = isset( $this->options['default_tab'] ) ? $this->options['default_tab'] : '';
+		$current_tab = isset( $_GET[ $tab_param ] ) ? sanitize_text_field( wp_unslash( $_GET[ $tab_param ] ) ) : $default_tab;
+
+		$redirect_args = array(
+			'page'             => $settings_page,
+			'settings-updated' => 'true',
 		);
+
+		if ( ! empty( $current_tab ) ) {
+			$redirect_args[ $tab_param ] = $current_tab;
+		}
+
+		$redirect_url = add_query_arg( $redirect_args, admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect_url );
 		exit;
 	}
@@ -172,7 +211,22 @@ class Settings {
 					<p><?php echo esc_html( $this->options['description'] ); ?></p>
 				</div>
 
-				<form method="post" action="" class="wplm-license-form">
+				<?php
+				$settings_page = isset( $this->options['settings_page'] ) ? $this->options['settings_page'] : 'connect_ecommerce';
+				$tab_param     = isset( $this->options['tab_param'] ) ? $this->options['tab_param'] : 'tab';
+				$default_tab   = isset( $this->options['default_tab'] ) ? $this->options['default_tab'] : '';
+				$current_tab   = isset( $_GET[ $tab_param ] ) ? sanitize_text_field( wp_unslash( $_GET[ $tab_param ] ) ) : $default_tab;
+				$form_action   = add_query_arg(
+					array(
+						'page' => $settings_page,
+					),
+					admin_url( 'admin.php' )
+				);
+				if ( ! empty( $current_tab ) ) {
+					$form_action = add_query_arg( $tab_param, $current_tab, $form_action );
+				}
+				?>
+				<form method="post" action="<?php echo esc_url( $form_action ); ?>" class="wplm-license-form">
 					<?php wp_nonce_field( 'Update_License_Options', 'license_nonce' ); ?>
 
 					<div class="wplm-form-group">
@@ -187,7 +241,6 @@ class Settings {
 								value="<?php echo esc_attr( $status_data['license_key'] ); ?>"
 								placeholder="<?php echo esc_attr__( 'Enter your license key', $this->license->get_text_domain() ); ?>"
 								class="wplm-input"
-								<?php echo 'active' === $status_data['status'] ? 'readonly' : ''; ?>
 							/>
 							<?php if ( 'active' === $status_data['status'] ) : ?>
 								<label class="wplm-deactivate-label">
