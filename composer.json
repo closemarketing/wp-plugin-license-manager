@@ -27,7 +27,9 @@
 		"wp-coding-standards/wpcs": "^3.0",
 		"phpcompatibility/phpcompatibility-wp": "*",
 		"yoast/phpunit-polyfills": "^1.0",
-		"wp-phpunit/wp-phpunit": "^6.3"
+		"wp-phpunit/wp-phpunit": "^6.3",
+		"php-stubs/wordpress-stubs": "^6.7",
+		"szepeviktor/phpstan-wordpress": "^1.3"
 	},
 	"autoload": {
 		"psr-4": {
@@ -40,7 +42,10 @@
 	"scripts": {
 		"test": "phpunit",
 		"test-debug": "XDEBUG_MODE=debug XDEBUG_TRIGGER=1 phpunit",
-		"test-install": "bash bin/install-wp-tests.sh wordpress_test root 'root' 127.0.0.1 latest"
+		"test-install": "bash bin/install-wp-tests.sh wordpress_test root 'root' 127.0.0.1 latest",
+		"lint": "phpcs --standard=WordPress src/",
+		"format": "phpcbf --standard=WordPress src/",
+		"phpstan": "phpstan analyse --memory-limit=2048M"
 	},
 	"support": {
 		"issues": "https://github.com/closemarketing/wp-plugin-license-manager/issues",

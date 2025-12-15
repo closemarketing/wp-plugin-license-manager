@@ -391,6 +391,77 @@ Replace `{slug}` with your plugin slug.
 ### 1.0.0
 - Initial release with WooCommerce API Manager support
 
+## Development
+
+### Running Tests
+
+This library includes PHPUnit tests to ensure code quality and compatibility across PHP versions 7.4 to 8.3.
+
+#### Setup Test Environment
+
+1. Install development dependencies:
+```bash
+composer install
+```
+
+2. Install WordPress test suite:
+```bash
+composer test-install
+```
+
+This will set up WordPress and its test suite in your system's temporary directory.
+
+#### Run Tests
+
+```bash
+# Run all tests
+composer test
+
+# Run tests with debug (Xdebug)
+composer test-debug
+
+# Run a specific test file
+./vendor/bin/phpunit tests/Unit/LicenseTest.php
+
+# Run tests with coverage report
+./vendor/bin/phpunit --coverage-html coverage
+```
+
+#### Continuous Integration
+
+Tests run automatically via GitHub Actions on:
+- Pull requests to `main` or `develop` branches
+- Push to `main` or `develop` branches
+- Matrix testing with PHP 8.3, 8.2, 8.1, and 7.4
+
+**Important**: This is a library, so `composer.lock` is intentionally not versioned. Each PHP version will resolve dependencies appropriately during CI/CD, ensuring compatibility with older PHP versions.
+
+### Code Quality
+
+```bash
+# Run PHP CodeSniffer
+composer lint
+
+# Fix coding standards automatically
+composer format
+
+# Run PHPStan static analysis (with WordPress stubs)
+composer phpstan
+```
+
+The library uses:
+- **PHP CodeSniffer** with WordPress Coding Standards
+- **PHPStan** Level 5 with WordPress stubs for accurate type checking
+- **PHPCompatibilityWP** for PHP 7.4+ compatibility checks
+
+### Contributing Guidelines
+
+1. Follow WordPress Coding Standards
+2. Write tests for new features
+3. Ensure all tests pass before submitting PR
+4. Update documentation as needed
+5. Test with multiple PHP versions (7.4, 8.1, 8.2, 8.3)
+
 ## Support
 
 For support, please visit:
