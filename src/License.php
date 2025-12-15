@@ -35,18 +35,21 @@ class License {
 	 * @var array
 	 */
 	private $default_options = array(
-		'api_url'           => '',           // API URL (required).
-		'rest_api_key'      => '',           // REST API Consumer Key (required).
-		'rest_api_secret'   => '',           // REST API Consumer Secret (required).
-		'product_uuid'      => '',           // Product UUID (required).
-		'file'              => '',           // Plugin main file (required).
-		'version'           => '',           // Plugin version (required).
-		'slug'              => '',           // Plugin slug (required).
-		'name'              => '',           // Plugin name (required).
-		'text_domain'       => 'default',    // Text domain for translations.
-		'plugin_slug'       => '',           // Plugin slug for updates.
-		'plugin_name'       => '',           // Plugin name for updates.
+		'api_url'           => '',               // API URL (required).
+		'rest_api_key'      => '',               // REST API Consumer Key (required).
+		'rest_api_secret'   => '',               // REST API Consumer Secret (required).
+		'product_uuid'      => '',               // Product UUID (required).
+		'file'              => '',               // Plugin main file (required).
+		'version'           => '',               // Plugin version (required).
+		'slug'              => '',               // Plugin slug (required).
+		'name'              => '',               // Plugin name (required).
+		'text_domain'       => 'default',        // Text domain for translations.
+		'plugin_slug'       => '',               // Plugin slug for updates.
+		'plugin_name'       => '',               // Plugin name for updates.
 		'capabilities'      => 'manage_options', // Required capability.
+		'settings_page'     => 'connect_ecommerce', // Settings page slug.
+		'default_tab'       => '',               // Default tab to redirect to.
+		'tab_param'         => 'tab',            // URL parameter name for tabs.
 	);
 
 	/**
@@ -523,6 +526,33 @@ class License {
 	 */
 	public function get_plugin_name() {
 		return $this->options['name'];
+	}
+
+	/**
+	 * Get settings page
+	 *
+	 * @return string
+	 */
+	public function get_settings_page() {
+		return isset( $this->options['settings_page'] ) ? $this->options['settings_page'] : 'connect_ecommerce';
+	}
+
+	/**
+	 * Get default tab
+	 *
+	 * @return string
+	 */
+	public function get_default_tab() {
+		return isset( $this->options['default_tab'] ) ? $this->options['default_tab'] : '';
+	}
+
+	/**
+	 * Get tab parameter name
+	 *
+	 * @return string
+	 */
+	public function get_tab_param() {
+		return isset( $this->options['tab_param'] ) ? $this->options['tab_param'] : 'tab';
 	}
 
 	/**

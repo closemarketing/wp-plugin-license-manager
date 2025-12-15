@@ -1,6 +1,5 @@
 # Composer
 /vendor/
-composer.lock
 
 # WordPress
 .DS_Store
@@ -15,6 +14,7 @@ composer.lock
 # Testing
 .phpunit.result.cache
 phpunit.xml
+/tmp
 
 # Build files
 /build/

@@ -103,7 +103,8 @@ class Settings {
 		}
 
 		// Check if we're on the correct page.
-		if ( ! isset( $_GET['page'] ) || 'connect_ecommerce' !== $_GET['page'] ) {
+		$settings_page = $this->license->get_settings_page();
+		if ( ! isset( $_GET['page'] ) || $settings_page !== $_GET['page'] ) {
 			return;
 		}
 
@@ -139,12 +140,12 @@ class Settings {
 		$this->license->validate_license( $input );
 
 		// Redirect to prevent form resubmission and show updated status.
-		$current_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'connect-woocommerce-neo-license';
+		$current_tab  = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : $this->license->get_default_tab();
 		$redirect_url = add_query_arg(
 			array(
-				'page'  => 'connect_ecommerce',
-				'tab'   => $current_tab,
-				'settings-updated' => 'true',
+				'page'                             => $this->license->get_settings_page(),
+				$this->license->get_tab_param()    => $current_tab,
+				'settings-updated'                 => 'true',
 			),
 			admin_url( 'admin.php' )
 		);

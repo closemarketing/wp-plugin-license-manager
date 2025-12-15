@@ -8,7 +8,9 @@ A reusable Composer library for managing WordPress plugin licenses with Enwikuna
 - ✅ License activation/deactivation
 - ✅ Automatic plugin updates
 - ✅ Configurable text domain for translations
-- ✅ Flexible settings integration
+- ✅ Flexible settings integration with customizable page and tabs
+- ✅ Automatic settings UI generation with Settings class
+- ✅ Improved license deactivation handling
 - ✅ Enwikuna License Manager compatible
 - ✅ WordPress Coding Standards compliant
 
@@ -108,9 +110,100 @@ function myplugin_is_license_valid() {
 }
 ```
 
+### Using the Settings Class (Recommended)
+
+The `Settings` class provides automatic UI generation and form handling. This is the easiest way to integrate license management:
+
+```php
+use Closemarketing\WPLicenseManager\License;
+use Closemarketing\WPLicenseManager\Settings;
+
+add_action( 'plugins_loaded', function() {
+    global $myplugin_license;
+
+    if ( ! class_exists( '\Closemarketing\WPLicenseManager\License' ) ) {
+        return;
+    }
+
+    try {
+        // Create license instance.
+        $myplugin_license = new License(
+            array(
+                'api_url'         => MYPLUGIN_LICENSE_API_URL,
+                'rest_api_key'    => MYPLUGIN_LICENSE_API_KEY,
+                'rest_api_secret' => MYPLUGIN_LICENSE_API_SECRET,
+                'product_uuid'    => MYPLUGIN_LICENSE_PRODUCT_UUID,
+                'file'           => __FILE__,
+                'version'        => '1.0.0',
+                'slug'           => 'my-plugin',
+                'name'           => 'My Awesome Plugin',
+                'text_domain'    => 'my-plugin',
+            )
+        );
+
+        // Create Settings instance with automatic UI.
+        $license_settings = new Settings(
+            $myplugin_license,
+            array(
+                'title'         => __( 'My Plugin License', 'my-plugin' ),
+                'description'   => __( 'Manage your license to receive updates and support.', 'my-plugin' ),
+                'plugin_name'   => 'My Awesome Plugin',
+                'purchase_url'  => 'https://yourstore.com/plugins/my-plugin/',
+                'renew_url'     => 'https://yourstore.com/my-account/',
+                'benefits'      => array(
+                    __( 'Automatic plugin updates', 'my-plugin' ),
+                    __( 'Access to new features', 'my-plugin' ),
+                    __( 'Priority support', 'my-plugin' ),
+                    __( 'Security patches', 'my-plugin' ),
+                ),
+                'settings_page' => 'my-plugin-settings',  // Your settings page slug.
+                'default_tab'   => 'license',            // Default tab for redirects.
+                'tab_param'     => 'tab',                // URL parameter for tabs.
+            )
+        );
+
+        // Add license tab to your existing settings page.
+        add_filter( 'my_plugin_settings_tabs', function( $tabs ) {
+            $tabs[] = array(
+                'tab'    => 'license',
+                'label'  => __( 'License', 'my-plugin' ),
+                'action' => 'my_plugin_license_content',
+            );
+            return $tabs;
+        });
+
+        // Render license content.
+        add_action( 'my_plugin_license_content', function() use ( $license_settings ) {
+            $license_settings->render();
+        });
+
+    } catch ( \Exception $e ) {
+        add_action( 'admin_notices', function() use ( $e ) {
+            echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
+        });
+    }
+}, 5 );
+```
+
+### Settings Class Options
+
+The `Settings` class accepts the following options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `title` | string | 'License Management' | Title displayed in the license card |
+| `description` | string | 'Manage your license...' | Description text |
+| `plugin_name` | string | Auto from License | Plugin name for display |
+| `purchase_url` | string | 'https://close.technology/' | URL to purchase page |
+| `renew_url` | string | 'https://close.technology/my-account/' | URL to renew license |
+| `benefits` | array | Default list | Array of benefit strings |
+| `settings_page` | string | 'connect_ecommerce' | Settings page slug where form is submitted |
+| `default_tab` | string | '' | Default tab for redirects after form submission |
+| `tab_param` | string | 'tab' | URL parameter name for tabs |
+
 ### Custom Settings Page Integration
 
-If you want to handle the license UI yourself (like FrontBlocks does), set the tab hooks to unused values and create your own form:
+If you want to handle the license UI yourself, you can still use the `License` class without the `Settings` class:
 
 ```php
 $license = new License(
@@ -186,7 +279,9 @@ Then in your settings page, create a form that submits to `options.php` with:
 
 ## Public Methods
 
-### `is_license_active()`
+### License Class Methods
+
+#### `is_license_active()`
 
 Check if the license is currently active:
 
@@ -196,7 +291,7 @@ if ( $license->is_license_active() ) {
 }
 ```
 
-### `get_api_key_status( $live = false )`
+#### `get_api_key_status( $live = false )`
 
 Get license status:
 
@@ -207,6 +302,53 @@ $status = $license->get_api_key_status();
 // Get real-time status from API.
 $status = $license->get_api_key_status( true );
 ```
+
+#### `get_option_key( $key )`
+
+Get the full option key with slug prefix:
+
+```php
+$apikey_key = $license->get_option_key( 'apikey' );
+// Returns: 'my-plugin_license_apikey'
+```
+
+#### `get_option_value( $key )`
+
+Get an option value:
+
+```php
+$license_key = $license->get_option_value( 'apikey' );
+```
+
+#### `validate_license( $input )`
+
+Validate and process license activation/deactivation:
+
+```php
+$input = array(
+    'my-plugin_license_apikey' => 'license-key-here',
+    'my-plugin_license_deactivate_checkbox' => 'on', // Optional, for deactivation
+);
+$license->validate_license( $input );
+```
+
+### Settings Class Methods
+
+#### `render()`
+
+Render the complete license settings UI:
+
+```php
+$settings = new Settings( $license, $options );
+$settings->render();
+```
+
+The Settings class automatically:
+- Handles form submission
+- Validates nonces
+- Processes license activation/deactivation
+- Redirects after form submission
+- Displays success/error messages
 
 ## Database Options
 
@@ -219,6 +361,14 @@ The library creates the following options in the WordPress database:
 Replace `{slug}` with your plugin slug.
 
 ## Changelog
+
+### 1.2.1
+- **New**: Added configurable options to Settings class (`settings_page`, `default_tab`, `tab_param`)
+- **Improved**: Enhanced license deactivation handling with better fallback mechanisms
+- **Improved**: Settings class now works with any plugin's settings page structure
+- **Fixed**: License deactivation now properly handles readonly fields
+- **Fixed**: License key is properly retrieved when deactivating from readonly input fields
+- **Documentation**: Updated README with comprehensive Settings class usage examples
 
 ### 1.2.0
 - Clean code.
@@ -240,6 +390,87 @@ Replace `{slug}` with your plugin slug.
 
 ### 1.0.0
 - Initial release with WooCommerce API Manager support
+
+## Important: Library vs Application
+
+> **🔔 This is a LIBRARY, not an application**
+> 
+> - ❌ **DO NOT** commit `composer.lock`
+> - ✅ **DO** use `composer update` in CI/CD
+> - 📖 Read [Composer Lock Policy](.github/COMPOSER-LOCK-POLICY.md) for details
+
+This ensures compatibility across PHP 7.4 to 8.3 by allowing each PHP version to resolve its own compatible dependencies.
+
+## Development
+
+### Running Tests
+
+This library includes PHPUnit tests to ensure code quality and compatibility across PHP versions 7.4 to 8.3.
+
+#### Setup Test Environment
+
+1. Install development dependencies:
+```bash
+composer install
+```
+
+2. Install WordPress test suite:
+```bash
+composer test-install
+```
+
+This will set up WordPress and its test suite in your system's temporary directory.
+
+#### Run Tests
+
+```bash
+# Run all tests
+composer test
+
+# Run tests with debug (Xdebug)
+composer test-debug
+
+# Run a specific test file
+./vendor/bin/phpunit tests/Unit/LicenseTest.php
+
+# Run tests with coverage report
+./vendor/bin/phpunit --coverage-html coverage
+```
+
+#### Continuous Integration
+
+Tests run automatically via GitHub Actions on:
+- Pull requests to `main` or `develop` branches
+- Push to `main` or `develop` branches
+- Matrix testing with PHP 8.3, 8.2, 8.1, and 7.4
+
+**Important**: This is a library, so `composer.lock` is intentionally not versioned. Each PHP version will resolve dependencies appropriately during CI/CD, ensuring compatibility with older PHP versions. See [Composer Lock Policy](.github/COMPOSER-LOCK-POLICY.md) for detailed explanation.
+
+### Code Quality
+
+```bash
+# Run PHP CodeSniffer
+composer lint
+
+# Fix coding standards automatically
+composer format
+
+# Run PHPStan static analysis (with WordPress stubs)
+composer phpstan
+```
+
+The library uses:
+- **PHP CodeSniffer** with WordPress Coding Standards
+- **PHPStan** Level 5 with WordPress stubs for accurate type checking
+- **PHPCompatibilityWP** for PHP 7.4+ compatibility checks
+
+### Contributing Guidelines
+
+1. Follow WordPress Coding Standards
+2. Write tests for new features
+3. Ensure all tests pass before submitting PR
+4. Update documentation as needed
+5. Test with multiple PHP versions (7.4, 8.1, 8.2, 8.3)
 
 ## Support
 

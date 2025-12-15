@@ -1,0 +1,36 @@
+# Directories
+/.git
+/.github
+/node_modules
+/vendor
+/tests
+/bin
+
+# Files
+.distignore
+.editorconfig
+.gitattributes
+.gitignore
+.travis.yml
+circle.yml
+.DS_Store
+composer.json
+composer.lock
+phpcs.xml.dist
+phpunit.xml.dist
+.phpunit.result.cache
+phpstan.neon.dist
+README.md
+*.sql
+*.tar.gz
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.local

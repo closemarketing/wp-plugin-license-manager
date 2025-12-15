@@ -1,0 +1,18 @@
+includes:
+	- vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+	level: 5
+	paths:
+		- src
+	bootstrapFiles:
+		- tests/phpstan-bootstrap.php
+	stubFiles:
+		- vendor/szepeviktor/phpstan-wordpress/bootstrap.php
+	excludePaths:
+		- vendor/
+	ignoreErrors:
+		# Ignore dynamic property access on stdClass from API responses
+		- '#Access to an undefined property object::\$(response|no_update)#'
+		# Ignore ternary operator conditions from PHPDoc types
+		- '#Ternary operator condition is always true#'
