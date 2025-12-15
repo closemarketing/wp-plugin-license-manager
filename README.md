@@ -391,6 +391,16 @@ Replace `{slug}` with your plugin slug.
 ### 1.0.0
 - Initial release with WooCommerce API Manager support
 
+## Important: Library vs Application
+
+> **🔔 This is a LIBRARY, not an application**
+> 
+> - ❌ **DO NOT** commit `composer.lock`
+> - ✅ **DO** use `composer update` in CI/CD
+> - 📖 Read [Composer Lock Policy](.github/COMPOSER-LOCK-POLICY.md) for details
+
+This ensures compatibility across PHP 7.4 to 8.3 by allowing each PHP version to resolve its own compatible dependencies.
+
 ## Development
 
 ### Running Tests
@@ -434,7 +444,7 @@ Tests run automatically via GitHub Actions on:
 - Push to `main` or `develop` branches
 - Matrix testing with PHP 8.3, 8.2, 8.1, and 7.4
 
-**Important**: This is a library, so `composer.lock` is intentionally not versioned. Each PHP version will resolve dependencies appropriately during CI/CD, ensuring compatibility with older PHP versions.
+**Important**: This is a library, so `composer.lock` is intentionally not versioned. Each PHP version will resolve dependencies appropriately during CI/CD, ensuring compatibility with older PHP versions. See [Composer Lock Policy](.github/COMPOSER-LOCK-POLICY.md) for detailed explanation.
 
 ### Code Quality
 
