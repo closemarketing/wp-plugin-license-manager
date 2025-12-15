@@ -35,18 +35,21 @@ class License {
 	 * @var array
 	 */
 	private $default_options = array(
-		'api_url'           => '',           // API URL (required).
-		'rest_api_key'      => '',           // REST API Consumer Key (required).
-		'rest_api_secret'   => '',           // REST API Consumer Secret (required).
-		'product_uuid'      => '',           // Product UUID (required).
-		'file'              => '',           // Plugin main file (required).
-		'version'           => '',           // Plugin version (required).
-		'slug'              => '',           // Plugin slug (required).
-		'name'              => '',           // Plugin name (required).
-		'text_domain'       => 'default',    // Text domain for translations.
-		'plugin_slug'       => '',           // Plugin slug for updates.
-		'plugin_name'       => '',           // Plugin name for updates.
+		'api_url'           => '',               // API URL (required).
+		'rest_api_key'      => '',               // REST API Consumer Key (required).
+		'rest_api_secret'   => '',               // REST API Consumer Secret (required).
+		'product_uuid'      => '',               // Product UUID (required).
+		'file'              => '',               // Plugin main file (required).
+		'version'           => '',               // Plugin version (required).
+		'slug'              => '',               // Plugin slug (required).
+		'name'              => '',               // Plugin name (required).
+		'text_domain'       => 'default',        // Text domain for translations.
+		'plugin_slug'       => '',               // Plugin slug for updates.
+		'plugin_name'       => '',               // Plugin name for updates.
 		'capabilities'      => 'manage_options', // Required capability.
+		'settings_page'     => 'connect_ecommerce', // Settings page slug.
+		'default_tab'       => '',               // Default tab to redirect to.
+		'tab_param'         => 'tab',            // URL parameter name for tabs.
 	);
 
 	/**
@@ -173,22 +176,15 @@ class License {
 	 */
 	public function validate_license( $input ) {
 		$apikey_key        = $this->get_option_key( 'apikey' );
-		$deactivate_key    = $this->get_option_key( 'deactivate_checkbox' );
 		$api_key           = isset( $input[ $apikey_key ] ) ? trim( $input[ $apikey_key ] ) : '';
 		$api_key           = sanitize_text_field( $api_key );
 		$activation_status = get_option( $this->get_option_key( 'activated' ) );
-		$checkbox_status   = get_option( $deactivate_key );
+		$checkbox_status   = get_option( $this->get_option_key( 'deactivate_checkbox' ) );
 		$current_api_key   = get_option( $apikey_key, '' );
 
-		// Deactivate License - Check this FIRST before any activation logic.
-		if ( isset( $input[ $deactivate_key ] ) && 'on' === $input[ $deactivate_key ] ) {
-			// Always use current_api_key if api_key is empty (e.g., when field is readonly).
+		// Deactivate License.
+		if ( isset( $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) && 'on' === $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) {
 			$key_to_deactivate = ! empty( $api_key ) ? $api_key : $current_api_key;
-
-			// If still empty, try to get it directly from options as fallback.
-			if ( empty( $key_to_deactivate ) ) {
-				$key_to_deactivate = $this->get_option_value( 'apikey' );
-			}
 
 			if ( ! empty( $key_to_deactivate ) ) {
 				$deactivation_result = $this->license_deactivate( $key_to_deactivate );
@@ -207,10 +203,6 @@ class License {
 				return array();
 			}
 
-			// If no key found, still deactivate locally.
-			update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-			update_option( $apikey_key, '' );
-			add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated locally (no key found to deactivate remotely).', $this->options['text_domain'] ), 'updated' );
 			return array();
 		}
 
@@ -220,9 +212,7 @@ class License {
 		}
 
 		// Activate License if key changed or status is deactivated.
-		// IMPORTANT: Don't activate if deactivate checkbox is present in input (already handled above).
-		$is_deactivating = isset( $input[ $deactivate_key ] ) && 'on' === $input[ $deactivate_key ];
-		if ( ! $is_deactivating && ! empty( $api_key ) && ( 'Deactivated' === $activation_status || empty( $activation_status ) || $current_api_key !== $api_key ) ) {
+		if ( ! empty( $api_key ) && ( 'Deactivated' === $activation_status || empty( $activation_status ) || 'on' === $checkbox_status || $current_api_key !== $api_key ) ) {
 			// Deactivate existing key if different.
 			if ( ! empty( $current_api_key ) && $current_api_key !== $api_key ) {
 				$this->license_deactivate( $current_api_key );
@@ -536,6 +526,33 @@ class License {
 	 */
 	public function get_plugin_name() {
 		return $this->options['name'];
+	}
+
+	/**
+	 * Get settings page
+	 *
+	 * @return string
+	 */
+	public function get_settings_page() {
+		return isset( $this->options['settings_page'] ) ? $this->options['settings_page'] : 'connect_ecommerce';
+	}
+
+	/**
+	 * Get default tab
+	 *
+	 * @return string
+	 */
+	public function get_default_tab() {
+		return isset( $this->options['default_tab'] ) ? $this->options['default_tab'] : '';
+	}
+
+	/**
+	 * Get tab parameter name
+	 *
+	 * @return string
+	 */
+	public function get_tab_param() {
+		return isset( $this->options['tab_param'] ) ? $this->options['tab_param'] : 'tab';
 	}
 
 	/**
