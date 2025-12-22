@@ -169,6 +169,24 @@ class License {
 	}
 
 	/**
+	 * Get transient key for license status cache.
+	 *
+	 * @return string
+	 */
+	private function get_license_status_transient_key() {
+		return $this->get_option_key( 'status_check' );
+	}
+
+	/**
+	 * Clear license status cache.
+	 *
+	 * @return void
+	 */
+	private function clear_license_status_cache() {
+		delete_transient( $this->get_license_status_transient_key() );
+	}
+
+	/**
 	 * Validates license option
 	 *
 	 * @param array $input Settings input option.
@@ -192,6 +210,7 @@ class License {
 				if ( ! is_wp_error( $deactivation_result ) ) {
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
 					update_option( $apikey_key, '' );
+					$this->clear_license_status_cache();
 					add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated successfully.', $this->options['text_domain'] ), 'updated' );
 					return array();
 				}
@@ -199,6 +218,7 @@ class License {
 				// Deactivate locally anyway.
 				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
 				update_option( $apikey_key, '' );
+				$this->clear_license_status_cache();
 				add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated locally.', $this->options['text_domain'] ), 'updated' );
 				return array();
 			}
@@ -209,6 +229,7 @@ class License {
 		// Save license key first if provided.
 		if ( ! empty( $api_key ) && $current_api_key !== $api_key ) {
 			update_option( $apikey_key, $api_key );
+			$this->clear_license_status_cache();
 		}
 
 		// Activate License if key changed or status is deactivated.
@@ -231,6 +252,7 @@ class License {
 					update_option( $apikey_key, $api_key );
 					update_option( $this->get_option_key( 'activated' ), 'Activated' );
 					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+					$this->clear_license_status_cache();
 
 					return array(
 						'status'  => 'ok',
@@ -241,6 +263,7 @@ class License {
 					add_settings_error( 'license_expired', 'expired_msg', $message, 'error' );
 					update_option( $apikey_key, $api_key );
 					update_option( $this->get_option_key( 'activated' ), 'Expired' );
+					$this->clear_license_status_cache();
 					return array();
 				}
 			}
@@ -248,13 +271,15 @@ class License {
 			if ( is_wp_error( $activation_result ) ) {
 				add_settings_error( 'license_error', 'license_client_error', $activation_result->get_error_message(), 'error' );
 				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+				$this->clear_license_status_cache();
 			} else {
 				$message = esc_html__( 'The license key activation could not be completed.', $this->options['text_domain'] );
 				add_settings_error( 'not_activated', 'not_activated_error', $message );
 				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+				$this->clear_license_status_cache();
 			}
 		} elseif ( ! empty( $api_key ) && $current_api_key === $api_key && 'Activated' === $activation_status ) {
-			// Key is the same and already activated, just verify status.
+			// Key is the same and already activated, just verify status (uses cache).
 			$response = $this->api_request( 'licenses', $api_key, array(), 'GET' );
 			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
 				$api_status = isset( $response->data->status ) ? $response->data->status : '';
@@ -263,6 +288,7 @@ class License {
 				} elseif ( 'expired' === $api_status ) {
 					update_option( $this->get_option_key( 'activated' ), 'Expired' );
 				}
+				$this->clear_license_status_cache();
 			}
 		}
 
@@ -280,7 +306,7 @@ class License {
 			return new \WP_Error( 'missing_key', __( 'The License Key is missing from the activation request.', $this->options['text_domain'] ) );
 		}
 
-		return $this->api_request(
+		$result = $this->api_request(
 			'licenses/activate',
 			$api_key,
 			array(
@@ -289,6 +315,11 @@ class License {
 			),
 			'POST'
 		);
+
+		// Clear cache after activation attempt.
+		$this->clear_license_status_cache();
+
+		return $result;
 	}
 
 	/**
@@ -302,7 +333,7 @@ class License {
 			return new \WP_Error( 'missing_key', __( 'The License Key is missing from the deactivation request.', $this->options['text_domain'] ) );
 		}
 
-		return $this->api_request(
+		$result = $this->api_request(
 			'licenses/deactivate',
 			$license_key,
 			array(
@@ -310,6 +341,11 @@ class License {
 			),
 			'POST'
 		);
+
+		// Clear cache after deactivation attempt.
+		$this->clear_license_status_cache();
+
+		return $result;
 	}
 
 	/**
@@ -319,22 +355,55 @@ class License {
 	 * @return bool
 	 */
 	public function get_api_key_status( $live = false ) {
-		if ( $live ) {
-			$license_key = get_option( $this->get_option_key( 'apikey' ) );
-			if ( empty( $license_key ) ) {
-				return false;
-			}
+		if ( ! $live ) {
+			return 'Activated' === get_option( $this->get_option_key( 'activated' ) );
+		}
 
-			$response = $this->api_request( 'licenses', $license_key, array(), 'GET' );
-
-			if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
-				return 'active' === $response->data->status;
-			}
-
+		$license_key = get_option( $this->get_option_key( 'apikey' ) );
+		if ( empty( $license_key ) ) {
 			return false;
 		}
 
-		return 'Activated' === get_option( $this->get_option_key( 'activated' ) );
+		// Check transient cache first (24 hours = DAY_IN_SECONDS).
+		$transient_key = $this->get_license_status_transient_key();
+		$cached_status = get_transient( $transient_key );
+
+		if ( false !== $cached_status ) {
+			// Update stored status based on cached value.
+			if ( $cached_status ) {
+				update_option( $this->get_option_key( 'activated' ), 'Activated' );
+			} else {
+				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+			}
+			return $cached_status;
+		}
+
+		// Make API request if not cached.
+		$response = $this->api_request( 'licenses', $license_key, array(), 'GET' );
+
+		if ( ! is_wp_error( $response ) && ! empty( $response->data ) ) {
+			$is_active = 'active' === $response->data->status;
+
+			// Cache the result for 24 hours.
+			set_transient( $transient_key, $is_active, DAY_IN_SECONDS );
+
+			// Update stored status.
+			if ( $is_active ) {
+				update_option( $this->get_option_key( 'activated' ), 'Activated' );
+			} else {
+				$status = isset( $response->data->status ) ? $response->data->status : '';
+				if ( 'expired' === $status ) {
+					update_option( $this->get_option_key( 'activated' ), 'Expired' );
+				} else {
+					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
+				}
+			}
+
+			return $is_active;
+		}
+
+		// On API error, return false but don't cache the error.
+		return false;
 	}
 
 	/**
