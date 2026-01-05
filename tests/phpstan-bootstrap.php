@@ -15,3 +15,13 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', '/path/to/wordpress/' );
 }
+
+
+
+
+
+
+
+
+
+

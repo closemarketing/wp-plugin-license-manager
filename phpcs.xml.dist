@@ -50,3 +50,13 @@
 	<!-- Minimum WordPress version -->
 	<config name="minimum_supported_wp_version" value="5.0"/>
 </ruleset>
+
+
+
+
+
+
+
+
+
+
