@@ -429,23 +429,24 @@ class License {
 			return $transient;
 		}
 
-		$new_version  = isset( $response->data->version ) ? (string) $response->data->version : '';
+		$new_version  = isset( $response->data->new_version ) ? (string) $response->data->new_version : '';
 		$curr_version = (string) $this->options['version'];
+		$plugin_base  = plugin_basename( $this->options['file'] );
 
 		if ( ! empty( $new_version ) && ! empty( $curr_version ) && version_compare( $new_version, $curr_version, '>' ) ) {
 			$package = array(
 				'id'             => isset( $response->data->id ) ? $response->data->id : '',
-				'slug'           => isset( $response->data->slug ) ? $response->data->slug : $this->options['plugin_slug'],
-				'plugin'         => $this->options['plugin_name'],
+				'slug'           => $this->options['plugin_slug'],
+				'plugin'         => $plugin_base,
 				'new_version'    => $new_version,
 				'url'            => isset( $response->data->url ) ? $response->data->url : '',
 				'tested'         => isset( $response->data->tested ) ? $response->data->tested : '',
-				'package'        => isset( $response->data->download_url ) ? $response->data->download_url : '',
+				'package'        => isset( $response->data->package ) ? html_entity_decode( $response->data->package ) : '',
 				'upgrade_notice' => isset( $response->data->upgrade_notice ) ? $response->data->upgrade_notice : '',
 			);
 
-			$transient->response[ $this->options['plugin_name'] ] = (object) $package;
-			unset( $transient->no_update[ $this->options['plugin_name'] ] );
+			$transient->response[ $plugin_base ] = (object) $package;
+			unset( $transient->no_update[ $plugin_base ] );
 		}
 
 		return $transient;
@@ -481,7 +482,7 @@ class License {
 		return (object) array(
 			'name'          => isset( $data->name ) ? $data->name : $this->options['name'],
 			'slug'          => isset( $data->slug ) ? $data->slug : $this->options['plugin_slug'],
-			'version'       => isset( $data->version ) ? $data->version : '',
+			'version'       => isset( $data->new_version ) ? $data->new_version : '',
 			'author'        => isset( $data->author ) ? $data->author : '',
 			'homepage'      => isset( $data->homepage ) ? $data->homepage : '',
 			'requires'      => isset( $data->requires ) ? $data->requires : '',
@@ -492,7 +493,7 @@ class License {
 				'description' => isset( $data->description ) ? $data->description : '',
 				'changelog'   => isset( $data->changelog ) ? $data->changelog : '',
 			),
-			'download_link' => isset( $data->download_url ) ? $data->download_url : '',
+			'download_link' => isset( $data->package ) ? html_entity_decode( $data->package ) : '',
 			'banners'       => array(),
 		);
 	}
