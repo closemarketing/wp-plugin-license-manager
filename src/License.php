@@ -367,12 +367,12 @@ class License {
 		if ( ! empty( $new_version ) && ! empty( $curr_version ) && version_compare( $new_version, $curr_version, '>' ) ) {
 			$package = array(
 				'id'             => isset( $response->data->id ) ? $response->data->id : '',
-				'slug'           => isset( $response->data->slug ) ? $response->data->slug : $this->options['plugin_slug'],
+				'slug'           => $this->options['plugin_slug'],
 				'plugin'         => $plugin_base,
 				'new_version'    => $new_version,
 				'url'            => isset( $response->data->url ) ? $response->data->url : '',
 				'tested'         => isset( $response->data->tested ) ? $response->data->tested : '',
-				'package'        => isset( $response->data->package ) ? $response->data->package : '',
+				'package'        => isset( $response->data->package ) ? html_entity_decode( $response->data->package ) : '',
 				'upgrade_notice' => isset( $response->data->upgrade_notice ) ? $response->data->upgrade_notice : '',
 			);
 
@@ -413,7 +413,7 @@ class License {
 		return (object) array(
 			'name'          => isset( $data->name ) ? $data->name : $this->options['name'],
 			'slug'          => isset( $data->slug ) ? $data->slug : $this->options['plugin_slug'],
-			'version'       => isset( $data->version ) ? $data->version : '',
+			'version'       => isset( $data->new_version ) ? $data->new_version : '',
 			'author'        => isset( $data->author ) ? $data->author : '',
 			'homepage'      => isset( $data->homepage ) ? $data->homepage : '',
 			'requires'      => isset( $data->requires ) ? $data->requires : '',
@@ -424,7 +424,7 @@ class License {
 				'description' => isset( $data->description ) ? $data->description : '',
 				'changelog'   => isset( $data->changelog ) ? $data->changelog : '',
 			),
-			'download_link' => isset( $data->download_url ) ? $data->download_url : '',
+			'download_link' => isset( $data->package ) ? html_entity_decode( $data->package ) : '',
 			'banners'       => array(),
 		);
 	}
