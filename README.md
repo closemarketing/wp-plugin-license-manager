@@ -362,6 +362,10 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
+### 1.2.2 2026-04-30
+- Add cache to check license.
+- Fix updates and now brings the download directly.
+
 ### 1.2.1
 - **New**: Added configurable options to Settings class (`settings_page`, `default_tab`, `tab_param`)
 - **Improved**: Enhanced license deactivation handling with better fallback mechanisms
