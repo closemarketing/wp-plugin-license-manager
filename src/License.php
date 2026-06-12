@@ -198,7 +198,8 @@ class License {
 		$api_key           = sanitize_text_field( $api_key );
 		$activation_status = get_option( $this->get_option_key( 'activated' ) );
 		$checkbox_status   = get_option( $this->get_option_key( 'deactivate_checkbox' ) );
-		$current_api_key   = get_option( $apikey_key, '' );
+		$env_key_set       = $this->is_license_key_from_env();
+		$current_api_key   = $this->get_option_value( 'apikey' );
 
 		// Deactivate License.
 		if ( isset( $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) && 'on' === $input[ $this->get_option_key( 'deactivate_checkbox' ) ] ) {
@@ -209,7 +210,9 @@ class License {
 
 				if ( ! is_wp_error( $deactivation_result ) ) {
 					update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-					update_option( $apikey_key, '' );
+					if ( ! $env_key_set ) {
+						update_option( $apikey_key, '' );
+					}
 					$this->clear_license_status_cache();
 					add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated successfully.', $this->options['text_domain'] ), 'updated' );
 					return array();
@@ -217,7 +220,9 @@ class License {
 
 				// Deactivate locally anyway.
 				update_option( $this->get_option_key( 'activated' ), 'Deactivated' );
-				update_option( $apikey_key, '' );
+				if ( ! $env_key_set ) {
+					update_option( $apikey_key, '' );
+				}
 				$this->clear_license_status_cache();
 				add_settings_error( 'license_deactivate', 'deactivate_msg', esc_html__( 'License deactivated locally.', $this->options['text_domain'] ), 'updated' );
 				return array();
@@ -226,8 +231,8 @@ class License {
 			return array();
 		}
 
-		// Save license key first if provided.
-		if ( ! empty( $api_key ) && $current_api_key !== $api_key ) {
+		// Save license key first if provided (skip when key comes from env var).
+		if ( ! $env_key_set && ! empty( $api_key ) && $current_api_key !== $api_key ) {
 			update_option( $apikey_key, $api_key );
 			$this->clear_license_status_cache();
 		}
@@ -249,7 +254,9 @@ class License {
 					add_settings_error( 'activate_text', 'activate_msg', $message, 'updated' );
 
 					// Update license key and status.
-					update_option( $apikey_key, $api_key );
+					if ( ! $env_key_set ) {
+						update_option( $apikey_key, $api_key );
+					}
 					update_option( $this->get_option_key( 'activated' ), 'Activated' );
 					update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
 					$this->clear_license_status_cache();
@@ -261,7 +268,9 @@ class License {
 				} elseif ( 'expired' === $status ) {
 					$message = __( 'License has expired.', $this->options['text_domain'] );
 					add_settings_error( 'license_expired', 'expired_msg', $message, 'error' );
-					update_option( $apikey_key, $api_key );
+					if ( ! $env_key_set ) {
+						update_option( $apikey_key, $api_key );
+					}
 					update_option( $this->get_option_key( 'activated' ), 'Expired' );
 					$this->clear_license_status_cache();
 					return array();
@@ -359,7 +368,7 @@ class License {
 			return 'Activated' === get_option( $this->get_option_key( 'activated' ) );
 		}
 
-		$license_key = get_option( $this->get_option_key( 'apikey' ) );
+		$license_key = $this->get_option_value( 'apikey' );
 		if ( empty( $license_key ) ) {
 			return false;
 		}
@@ -417,7 +426,7 @@ class License {
 			return $transient;
 		}
 
-		$license_key = get_option( $this->get_option_key( 'apikey' ) );
+		$license_key = $this->get_option_value( 'apikey' );
 
 		if ( empty( $license_key ) || ! $this->get_api_key_status() ) {
 			return $transient;
@@ -465,7 +474,7 @@ class License {
 			return $result;
 		}
 
-		$license_key = get_option( $this->get_option_key( 'apikey' ) );
+		$license_key = $this->get_option_value( 'apikey' );
 
 		if ( empty( $license_key ) ) {
 			return $result;
@@ -553,12 +562,41 @@ class License {
 	}
 
 	/**
+	 * Get the environment variable name for this plugin's license key.
+	 *
+	 * Convention: CTECH_LICENSE_{SLUG_UPPERCASE}
+	 *
+	 * @return string
+	 */
+	public function get_env_var_name() {
+		return 'CTECH_LICENSE_' . strtoupper( preg_replace( '/[^a-zA-Z0-9]/', '_', $this->options['slug'] ) );
+	}
+
+	/**
+	 * Whether the license key is provided via an environment variable.
+	 *
+	 * @return bool
+	 */
+	public function is_license_key_from_env() {
+		return ! empty( getenv( $this->get_env_var_name() ) );
+	}
+
+	/**
 	 * Get option value
+	 *
+	 * For the 'apikey' key, the environment variable CTECH_LICENSE_{SLUG} takes
+	 * precedence over the database option.
 	 *
 	 * @param string $key Option key.
 	 * @return mixed
 	 */
 	public function get_option_value( $key ) {
+		if ( 'apikey' === $key ) {
+			$env_value = getenv( $this->get_env_var_name() );
+			if ( ! empty( $env_value ) ) {
+				return $env_value;
+			}
+		}
 		return get_option( $this->get_option_key( $key ) );
 	}
 

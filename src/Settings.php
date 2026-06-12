@@ -181,25 +181,38 @@ class Settings {
 							<?php echo esc_html__( 'License Key', $this->license->get_text_domain() ); ?>
 						</label>
 						<div class="wplm-input-group">
-							<input 
+							<input
 								type="text"
 								id="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
 								name="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
 								value="<?php echo esc_attr( $status_data['license_key'] ); ?>"
 								placeholder="<?php echo esc_attr__( 'Enter your license key', $this->license->get_text_domain() ); ?>"
 								class="wplm-input"
-								<?php echo 'active' === $status_data['status'] ? 'readonly' : ''; ?>
+								<?php echo ( $status_data['from_env'] || 'active' === $status_data['status'] ) ? 'readonly' : ''; ?>
+								<?php echo $status_data['from_env'] ? 'disabled' : ''; ?>
 							/>
-							<?php if ( 'active' === $status_data['status'] ) : ?>
+							<?php if ( 'active' === $status_data['status'] && ! $status_data['from_env'] ) : ?>
 								<label class="wplm-deactivate-label">
 									<input type="checkbox" name="<?php echo esc_attr( $this->license->get_option_key( 'deactivate_checkbox' ) ); ?>" value="on" />
 									<span><?php echo esc_html__( 'Deactivate', $this->license->get_text_domain() ); ?></span>
 								</label>
 							<?php endif; ?>
 						</div>
-						<p class="wplm-help-text">
-							<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
-						</p>
+						<?php if ( $status_data['from_env'] ) : ?>
+							<p class="wplm-help-text">
+								<?php
+								printf(
+									/* translators: %s: environment variable name */
+									esc_html__( 'License key is defined by the %s environment variable.', $this->license->get_text_domain() ),
+									'<code>' . esc_html( $status_data['env_var_name'] ) . '</code>'
+								);
+								?>
+							</p>
+						<?php else : ?>
+							<p class="wplm-help-text">
+								<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
+							</p>
+						<?php endif; ?>
 					</div>
 
 					<div class="wplm-form-group">
@@ -280,6 +293,8 @@ class Settings {
 	 */
 	private function get_license_status_data() {
 		$license_key     = $this->license ? $this->license->get_option_value( 'apikey' ) : '';
+		$from_env        = $this->license ? $this->license->is_license_key_from_env() : false;
+		$env_var_name    = $this->license ? $this->license->get_env_var_name() : '';
 		$activated_value = $this->license ? $this->license->get_option_value( 'activated' ) : 'Deactivated';
 
 		// Determine license status.
@@ -314,6 +329,8 @@ class Settings {
 
 		return array(
 			'license_key'  => $license_key,
+			'from_env'     => $from_env,
+			'env_var_name' => $env_var_name,
 			'status'       => $license_status,
 			'status_text'  => $status_text,
 			'status_class' => $status_class,
