@@ -362,6 +362,9 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
+### 1.2.3 2026-06-16
+- **New**: Support defining license keys via `CTECH_LICENSE_{SLUG}` environment variables. The env var takes precedence over the database option, no writes are made to the `apikey` DB option when it is set, and the settings UI shows the field as read-only with a notice indicating the active variable name. Multiple plugins in the same installation each use their own slug-namespaced variable to avoid collisions.
+
 ### 1.2.2 2026-04-30
 - Add cache to check license.
 - Fix updates and now brings the download directly.
