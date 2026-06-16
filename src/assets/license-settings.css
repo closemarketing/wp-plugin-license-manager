@@ -267,3 +267,34 @@
 	font-weight: 700;
 	font-size: 1.125rem;
 }
+
+.wplm-notice-env {
+	background: transparent;
+	border: none;
+	color: #6b7280;
+	padding: 0;
+}
+
+.wplm-notice-env p {
+	font-size: 0.75rem;
+	margin-bottom: 4px;
+}
+
+.wplm-env-help-title {
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: #374151;
+}
+
+.wplm-env-code {
+	background: #f3f4f6;
+	color: #374151;
+	border-radius: 4px;
+	padding: 6px 10px;
+	font-size: 0.75rem;
+	font-family: monospace;
+	overflow-x: auto;
+	margin: 4px 0 12px;
+	white-space: pre;
+	border: none;
+}
