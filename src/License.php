@@ -573,26 +573,48 @@ class License {
 	}
 
 	/**
-	 * Whether the license key is provided via an environment variable.
+	 * Whether the license key is provided via an environment variable or PHP constant.
 	 *
 	 * @return bool
 	 */
 	public function is_license_key_from_env() {
-		return ! empty( getenv( $this->get_env_var_name() ) );
+		return ! empty( $this->get_env_license_key() );
+	}
+
+	/**
+	 * Get the license key from environment variable or PHP constant.
+	 *
+	 * Checks getenv() first, then defined PHP constants (e.g. defined via wp-config.php).
+	 *
+	 * @return string
+	 */
+	private function get_env_license_key() {
+		$var_name = $this->get_env_var_name();
+
+		$env_value = getenv( $var_name );
+		if ( ! empty( $env_value ) ) {
+			return $env_value;
+		}
+
+		if ( defined( $var_name ) ) {
+			return (string) constant( $var_name );
+		}
+
+		return '';
 	}
 
 	/**
 	 * Get option value
 	 *
-	 * For the 'apikey' key, the environment variable CTECH_LICENSE_{SLUG} takes
-	 * precedence over the database option.
+	 * For the 'apikey' key, the environment variable or PHP constant CTECH_LICENSE_{SLUG}
+	 * takes precedence over the database option.
 	 *
 	 * @param string $key Option key.
 	 * @return mixed
 	 */
 	public function get_option_value( $key ) {
 		if ( 'apikey' === $key ) {
-			$env_value = getenv( $this->get_env_var_name() );
+			$env_value = $this->get_env_license_key();
 			if ( ! empty( $env_value ) ) {
 				return $env_value;
 			}

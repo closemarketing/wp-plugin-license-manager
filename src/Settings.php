@@ -173,6 +173,35 @@ class Settings {
 					<p><?php echo esc_html( $this->options['description'] ); ?></p>
 				</div>
 
+				<?php if ( $status_data['from_env'] ) : ?>
+					<div class="wplm-form-group">
+						<p class="wplm-help-text">
+							<?php
+							printf(
+								/* translators: %s: environment variable name */
+								esc_html__( 'License key is defined by the %s environment variable.', $this->license->get_text_domain() ),
+								'<code>' . esc_html( $status_data['env_var_name'] ) . '</code>'
+							);
+							?>
+						</p>
+					</div>
+
+					<div class="wplm-form-group">
+						<label class="wplm-label"><?php echo esc_html__( 'License Status', $this->license->get_text_domain() ); ?></label>
+						<div class="wplm-status-box <?php echo esc_attr( $status_data['status_class'] ); ?>">
+							<span class="wplm-status-icon"><?php echo $status_data['status_icon']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+							<span class="wplm-status-text"><?php echo esc_html( $status_data['status_text'] ); ?></span>
+						</div>
+					</div>
+
+					<div class="wplm-notice wplm-notice-env">
+						<p class="wplm-env-help-title"><?php echo esc_html__( 'How to set the environment variable', $this->license->get_text_domain() ); ?></p>
+						<p><?php echo esc_html__( 'You can define the license key in your wp-config.php:', $this->license->get_text_domain() ); ?></p>
+						<pre class="wplm-env-code">define( '<?php echo esc_html( $status_data['env_var_name'] ); ?>', 'YOUR-LICENSE-KEY' );</pre>
+						<p><?php echo esc_html__( 'Or as a server environment variable (e.g. in .env or your hosting panel):', $this->license->get_text_domain() ); ?></p>
+						<pre class="wplm-env-code"><?php echo esc_html( $status_data['env_var_name'] ); ?>=YOUR-LICENSE-KEY</pre>
+					</div>
+				<?php else : ?>
 				<form method="post" action="" class="wplm-license-form">
 					<?php wp_nonce_field( 'Update_License_Options', 'license_nonce' ); ?>
 
@@ -188,31 +217,18 @@ class Settings {
 								value="<?php echo esc_attr( $status_data['license_key'] ); ?>"
 								placeholder="<?php echo esc_attr__( 'Enter your license key', $this->license->get_text_domain() ); ?>"
 								class="wplm-input"
-								<?php echo ( $status_data['from_env'] || 'active' === $status_data['status'] ) ? 'readonly' : ''; ?>
-								<?php echo $status_data['from_env'] ? 'disabled' : ''; ?>
+								<?php echo 'active' === $status_data['status'] ? 'readonly' : ''; ?>
 							/>
-							<?php if ( 'active' === $status_data['status'] && ! $status_data['from_env'] ) : ?>
+							<?php if ( 'active' === $status_data['status'] ) : ?>
 								<label class="wplm-deactivate-label">
 									<input type="checkbox" name="<?php echo esc_attr( $this->license->get_option_key( 'deactivate_checkbox' ) ); ?>" value="on" />
 									<span><?php echo esc_html__( 'Deactivate', $this->license->get_text_domain() ); ?></span>
 								</label>
 							<?php endif; ?>
 						</div>
-						<?php if ( $status_data['from_env'] ) : ?>
-							<p class="wplm-help-text">
-								<?php
-								printf(
-									/* translators: %s: environment variable name */
-									esc_html__( 'License key is defined by the %s environment variable.', $this->license->get_text_domain() ),
-									'<code>' . esc_html( $status_data['env_var_name'] ) . '</code>'
-								);
-								?>
-							</p>
-						<?php else : ?>
-							<p class="wplm-help-text">
-								<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
-							</p>
-						<?php endif; ?>
+						<p class="wplm-help-text">
+							<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
+						</p>
 					</div>
 
 					<div class="wplm-form-group">
@@ -261,6 +277,7 @@ class Settings {
 						</button>
 					</div>
 				</form>
+				<?php endif; ?>
 			</div>
 
 			<div class="wplm-info-card">
