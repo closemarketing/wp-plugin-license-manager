@@ -255,11 +255,13 @@ class Settings {
 						</div>
 					<?php endif; ?>
 
-					<div class="wplm-form-actions">
-						<button type="submit" name="submit_license" class="wplm-button wplm-button-primary">
-							<?php echo 'active' === $status_data['status'] ? esc_html__( 'Update License', $this->license->get_text_domain() ) : esc_html__( 'Activate License', $this->license->get_text_domain() ); ?>
-						</button>
-					</div>
+					<?php if ( ! $status_data['from_env'] ) : ?>
+						<div class="wplm-form-actions">
+							<button type="submit" name="submit_license" class="wplm-button wplm-button-primary">
+								<?php echo 'active' === $status_data['status'] ? esc_html__( 'Update License', $this->license->get_text_domain() ) : esc_html__( 'Activate License', $this->license->get_text_domain() ); ?>
+							</button>
+						</div>
+					<?php endif; ?>
 				</form>
 			</div>
 

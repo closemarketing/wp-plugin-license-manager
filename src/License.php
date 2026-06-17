@@ -113,9 +113,53 @@ class License {
 		// Check for external blocking.
 		add_action( 'admin_notices', array( $this, 'check_external_blocking' ) );
 
+		// Auto-activate when key is provided via environment variable.
+		add_action( 'admin_init', array( $this, 'maybe_auto_activate_from_env' ) );
+
 		// Update checks.
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check' ) );
 		add_filter( 'plugins_api', array( $this, 'information_request' ), 10, 3 );
+	}
+
+	/**
+	 * Auto-activate the license when the key comes from an environment variable.
+	 *
+	 * Runs on admin_init. Skips if already activated or if an attempt was made
+	 * recently (rate-limited per key to avoid hammering the API on every page load).
+	 *
+	 * @return void
+	 */
+	public function maybe_auto_activate_from_env() {
+		if ( ! $this->is_license_key_from_env() ) {
+			return;
+		}
+
+		if ( 'Activated' === get_option( $this->get_option_key( 'activated' ) ) ) {
+			return;
+		}
+
+		$license_key       = $this->get_option_value( 'apikey' );
+		$attempt_transient = $this->options['slug'] . '_license_env_act_' . md5( $license_key );
+
+		// Rate-limit: only attempt once per hour per key value.
+		if ( get_transient( $attempt_transient ) ) {
+			return;
+		}
+		set_transient( $attempt_transient, true, HOUR_IN_SECONDS );
+
+		$result = $this->license_activate( $license_key );
+
+		if ( ! is_wp_error( $result ) && ! empty( $result->data ) ) {
+			$status = isset( $result->data->status ) ? $result->data->status : '';
+			if ( 'active' === $status ) {
+				update_option( $this->get_option_key( 'activated' ), 'Activated' );
+				update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+				$this->clear_license_status_cache();
+			} elseif ( 'expired' === $status ) {
+				update_option( $this->get_option_key( 'activated' ), 'Expired' );
+				$this->clear_license_status_cache();
+			}
+		}
 	}
 
 	/**
