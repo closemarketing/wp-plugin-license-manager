@@ -610,8 +610,9 @@ class License {
 			return (bool) $cached;
 		}
 
-		// No cache: verify against API and populate the transient for next 24 h.
-		return $this->get_api_key_status( true );
+		// No cache: fall back to stored DB status (fast, no API call).
+		// The transient will be refreshed next time get_api_key_status( true ) runs.
+		return $this->get_api_key_status();
 	}
 
 	/**
