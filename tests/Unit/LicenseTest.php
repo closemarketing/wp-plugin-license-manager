@@ -348,6 +348,75 @@ class LicenseTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test that rotating the env var key triggers re-activation even when status is Activated.
+	 *
+	 * Verifies that the env_key_hash comparison detects a key change and does not
+	 * short-circuit when the DB still shows 'Activated' for a different key.
+	 */
+	public function test_key_rotation_detected_when_hash_differs() {
+		$options = array(
+			'api_url'         => 'https://example.com',
+			'rest_api_key'    => 'test_key',
+			'rest_api_secret' => 'test_secret',
+			'product_uuid'    => 'test-uuid',
+			'file'            => __FILE__,
+			'version'         => '1.0.0',
+			'slug'            => 'test-plugin',
+			'name'            => 'Test Plugin',
+		);
+
+		// Simulate a previously activated state with an old key hash.
+		update_option( 'test-plugin_license_activated', 'Activated' );
+		update_option( 'test-plugin_license_env_key_hash', md5( 'old-env-key' ) );
+
+		// Now a new env key is set.
+		putenv( 'CTECH_LICENSE_TEST_PLUGIN=new-env-key' );
+
+		$license          = new License( $options );
+		$new_hash         = md5( 'new-env-key' );
+		$stored_hash      = get_option( 'test-plugin_license_env_key_hash' );
+		$current_env_hash = md5( $license->get_option_value( 'apikey' ) );
+
+		// The stored hash must differ from the current key hash → re-activation needed.
+		$this->assertNotEquals( $stored_hash, $current_env_hash );
+
+		putenv( 'CTECH_LICENSE_TEST_PLUGIN' );
+		delete_option( 'test-plugin_license_env_key_hash' );
+	}
+
+	/**
+	 * Test that no re-activation is needed when hash matches current env key.
+	 */
+	public function test_no_reactivation_when_hash_matches() {
+		$options = array(
+			'api_url'         => 'https://example.com',
+			'rest_api_key'    => 'test_key',
+			'rest_api_secret' => 'test_secret',
+			'product_uuid'    => 'test-uuid',
+			'file'            => __FILE__,
+			'version'         => '1.0.0',
+			'slug'            => 'test-plugin',
+			'name'            => 'Test Plugin',
+		);
+
+		putenv( 'CTECH_LICENSE_TEST_PLUGIN=stable-env-key' );
+
+		// Simulate previously activated with the same key.
+		update_option( 'test-plugin_license_activated', 'Activated' );
+		update_option( 'test-plugin_license_env_key_hash', md5( 'stable-env-key' ) );
+
+		$license     = new License( $options );
+		$stored_hash = get_option( 'test-plugin_license_env_key_hash' );
+		$env_hash    = md5( $license->get_option_value( 'apikey' ) );
+
+		// Hashes match → no re-activation needed.
+		$this->assertEquals( $stored_hash, $env_hash );
+
+		putenv( 'CTECH_LICENSE_TEST_PLUGIN' );
+		delete_option( 'test-plugin_license_env_key_hash' );
+	}
+
+	/**
 	 * Cleanup after all tests
 	 */
 	public function tearDown(): void {
@@ -357,6 +426,7 @@ class LicenseTest extends WP_UnitTestCase {
 		delete_option( 'test-plugin_license_activated' );
 		delete_option( 'test-plugin_license_apikey' );
 		delete_option( 'test-plugin_license_deactivate_checkbox' );
+		delete_option( 'test-plugin_license_env_key_hash' );
 
 		// Ensure env var is unset after each test.
 		putenv( 'CTECH_LICENSE_TEST_PLUGIN' );
