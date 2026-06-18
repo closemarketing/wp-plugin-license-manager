@@ -598,12 +598,6 @@ class License {
 	 * @return bool
 	 */
 	public function is_license_active() {
-		// Fast path: no key means no license.
-		$license_key = $this->get_option_value( 'apikey' );
-		if ( empty( $license_key ) ) {
-			return false;
-		}
-
 		// If a live-verified result is cached, trust it (avoids API call on every request).
 		$cached = get_transient( $this->get_license_status_transient_key() );
 		if ( false !== $cached ) {
@@ -611,7 +605,6 @@ class License {
 		}
 
 		// No cache: fall back to stored DB status (fast, no API call).
-		// The transient will be refreshed next time get_api_key_status( true ) runs.
 		return $this->get_api_key_status();
 	}
 
