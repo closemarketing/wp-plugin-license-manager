@@ -362,6 +362,10 @@ Replace `{slug}` with your plugin slug.
 
 ## Changelog
 
+### 1.2.3.1 2026-06-18
+- **Fixed**: Auto-activate from env var now tracks key hash to detect rotation and trigger re-activation.
+- **Fixed**: `is_license_active()` no longer requires `apikey` in DB to return activated status.
+
 ### 1.2.3 2026-06-16
 - **New**: Support defining license keys via `CTECH_LICENSE_{SLUG}` environment variables. The env var takes precedence over the database option, no writes are made to the `apikey` DB option when it is set, and the settings UI shows the field as read-only with a notice indicating the active variable name. Multiple plugins in the same installation each use their own slug-namespaced variable to avoid collisions.
 
