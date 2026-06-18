@@ -113,9 +113,61 @@ class License {
 		// Check for external blocking.
 		add_action( 'admin_notices', array( $this, 'check_external_blocking' ) );
 
+		// Auto-activate when key is provided via environment variable.
+		add_action( 'admin_init', array( $this, 'maybe_auto_activate_from_env' ) );
+
 		// Update checks.
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'update_check' ) );
 		add_filter( 'plugins_api', array( $this, 'information_request' ), 10, 3 );
+	}
+
+	/**
+	 * Auto-activate the license when the key comes from an environment variable.
+	 *
+	 * Runs on admin_init. A hash of the last successfully activated env key is
+	 * stored so that rotating the env var triggers re-activation even when the
+	 * DB status is already 'Activated'. Attempts are rate-limited per key hash
+	 * (1 h transient) to avoid hammering the API on every page load.
+	 *
+	 * @return void
+	 */
+	public function maybe_auto_activate_from_env() {
+		if ( ! $this->is_license_key_from_env() ) {
+			return;
+		}
+
+		$license_key      = $this->get_option_value( 'apikey' );
+		$current_key_hash = md5( $license_key );
+		$stored_key_hash  = get_option( $this->get_option_key( 'env_key_hash' ), '' );
+		$current_status   = get_option( $this->get_option_key( 'activated' ) );
+
+		// Already activated with this exact env key — nothing to do.
+		if ( 'Activated' === $current_status && $stored_key_hash === $current_key_hash ) {
+			return;
+		}
+
+		// Rate-limit: only attempt once per hour per key value.
+		$attempt_transient = $this->options['slug'] . '_license_env_act_' . $current_key_hash;
+		if ( get_transient( $attempt_transient ) ) {
+			return;
+		}
+		set_transient( $attempt_transient, true, HOUR_IN_SECONDS );
+
+		$result = $this->license_activate( $license_key );
+
+		if ( ! is_wp_error( $result ) && ! empty( $result->data ) ) {
+			$status = isset( $result->data->status ) ? $result->data->status : '';
+			if ( 'active' === $status ) {
+				update_option( $this->get_option_key( 'activated' ), 'Activated' );
+				update_option( $this->get_option_key( 'deactivate_checkbox' ), 'off' );
+				update_option( $this->get_option_key( 'env_key_hash' ), $current_key_hash );
+				$this->clear_license_status_cache();
+			} elseif ( 'expired' === $status ) {
+				update_option( $this->get_option_key( 'activated' ), 'Expired' );
+				update_option( $this->get_option_key( 'env_key_hash' ), $current_key_hash );
+				$this->clear_license_status_cache();
+			}
+		}
 	}
 
 	/**
@@ -546,6 +598,13 @@ class License {
 	 * @return bool
 	 */
 	public function is_license_active() {
+		// If a live-verified result is cached, trust it (avoids API call on every request).
+		$cached = get_transient( $this->get_license_status_transient_key() );
+		if ( false !== $cached ) {
+			return (bool) $cached;
+		}
+
+		// No cache: fall back to stored DB status (fast, no API call).
 		return $this->get_api_key_status();
 	}
 
@@ -578,22 +637,22 @@ class License {
 	 * @return bool
 	 */
 	public function is_license_key_from_env() {
-		return ! empty( $this->get_env_license_key() );
+		return ! empty( $this->get_env_value() );
 	}
 
 	/**
 	 * Get the license key from environment variable or PHP constant.
 	 *
-	 * Checks getenv() first, then defined PHP constants (e.g. defined via wp-config.php).
+	 * Checks getenv() first, then falls back to a PHP constant with the same name.
 	 *
-	 * @return string
+	 * @return string License key or empty string.
 	 */
-	private function get_env_license_key() {
+	private function get_env_value() {
 		$var_name = $this->get_env_var_name();
 
-		$env_value = getenv( $var_name );
-		if ( ! empty( $env_value ) ) {
-			return $env_value;
+		$env = getenv( $var_name );
+		if ( ! empty( $env ) ) {
+			return $env;
 		}
 
 		if ( defined( $var_name ) ) {
@@ -614,7 +673,7 @@ class License {
 	 */
 	public function get_option_value( $key ) {
 		if ( 'apikey' === $key ) {
-			$env_value = $this->get_env_license_key();
+			$env_value = $this->get_env_value();
 			if ( ! empty( $env_value ) ) {
 				return $env_value;
 			}

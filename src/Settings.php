@@ -214,7 +214,7 @@ class Settings {
 								type="text"
 								id="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
 								name="<?php echo esc_attr( $this->license->get_option_key( 'apikey' ) ); ?>"
-								value="<?php echo esc_attr( $status_data['license_key'] ); ?>"
+								value="<?php echo $status_data['from_env'] ? esc_attr( str_repeat( '•', strlen( $status_data['license_key'] ) ) ) : esc_attr( $status_data['license_key'] ); ?>"
 								placeholder="<?php echo esc_attr__( 'Enter your license key', $this->license->get_text_domain() ); ?>"
 								class="wplm-input"
 								<?php echo 'active' === $status_data['status'] ? 'readonly' : ''; ?>
@@ -226,9 +226,30 @@ class Settings {
 								</label>
 							<?php endif; ?>
 						</div>
-						<p class="wplm-help-text">
-							<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
-						</p>
+						<?php if ( $status_data['from_env'] ) : ?>
+							<p class="wplm-help-text">
+								<?php
+								printf(
+									/* translators: %s: environment variable name */
+									esc_html__( 'License key is defined by the %s environment variable.', $this->license->get_text_domain() ),
+									'<code>' . esc_html( $status_data['env_var_name'] ) . '</code>'
+								);
+								?>
+							</p>
+						<?php else : ?>
+							<p class="wplm-help-text">
+								<?php echo esc_html__( 'Enter your license key from your purchase confirmation email.', $this->license->get_text_domain() ); ?>
+							</p>
+							<p class="wplm-help-text">
+								<?php
+								printf(
+									/* translators: %s: environment variable name */
+									esc_html__( 'You can also define the license key via the environment variable: %s', $this->license->get_text_domain() ),
+									'<code>' . esc_html( $status_data['env_var_name'] ) . '</code>'
+								);
+								?>
+							</p>
+						<?php endif; ?>
 					</div>
 
 					<div class="wplm-form-group">
@@ -271,11 +292,13 @@ class Settings {
 						</div>
 					<?php endif; ?>
 
-					<div class="wplm-form-actions">
-						<button type="submit" name="submit_license" class="wplm-button wplm-button-primary">
-							<?php echo 'active' === $status_data['status'] ? esc_html__( 'Update License', $this->license->get_text_domain() ) : esc_html__( 'Activate License', $this->license->get_text_domain() ); ?>
-						</button>
-					</div>
+					<?php if ( ! $status_data['from_env'] ) : ?>
+						<div class="wplm-form-actions">
+							<button type="submit" name="submit_license" class="wplm-button wplm-button-primary">
+								<?php echo 'active' === $status_data['status'] ? esc_html__( 'Update License', $this->license->get_text_domain() ) : esc_html__( 'Activate License', $this->license->get_text_domain() ); ?>
+							</button>
+						</div>
+					<?php endif; ?>
 				</form>
 				<?php endif; ?>
 			</div>
